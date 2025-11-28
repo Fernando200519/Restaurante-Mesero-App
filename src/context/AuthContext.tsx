@@ -1,10 +1,10 @@
-// src/context/AuthContext.tsx
 import React, { createContext, useState, useContext } from "react";
 import { Usuario } from "../types/auth";
 import { authApi } from "../api/authApi";
 
 interface AuthContextType {
   user: Usuario | null;
+  // La función signIn devuelve si fue éxito y si requiere cambio de pass
   signIn: (
     correo: string,
     contrasena: string
@@ -21,42 +21,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (correo: string, contrasena: string) => {
     try {
-      // 1. Hacemos Login para obtener Token y Estado
-      const loginData = await authApi.login(correo, contrasena);
-      setToken(loginData.token);
+      // 1. Petición al Backend
+      // authApi.login debe devolver Promise<LoginResponse>
+      const response = await authApi.login(correo, contrasena);
 
-      // 2. TRUCO: Buscamos al usuario usando el token recién obtenido
-      // Traemos todos los usuarios y filtramos por el correo que ingresó
-      const allUsers = await authApi.getUsers(loginData.token);
-      const currentUser = allUsers.find((u) => u.correo === correo);
+      setToken(response.token);
 
-      if (!currentUser) {
-        console.error("Usuario logueado no encontrado en la base de datos");
-        return { success: false };
-      }
+      // 2. Mapeo de datos (Aquí arreglamos lo "raro")
+      // Tu backend devuelve los datos personales dentro de 'infoUsuario',
+      // pero el 'estado' viene afuera. Aquí unimos todo.
+      const usuarioFormateado: Usuario = {
+        id: response.infoUsuario.id,
+        nombre: response.infoUsuario.nombre,
+        apellidoPaterno: response.infoUsuario.apellidoPaterno,
+        apellidoMaterno: response.infoUsuario.apellidoMaterno,
+        tipo: response.infoUsuario.tipo,
+        estado: response.estado, // Tomamos el estado de la raíz
+        correo: correo, // Usamos el correo que escribió el usuario (porque infoUsuario no lo trae)
+      };
 
-      // 3. Guardamos al usuario COMPLETO (con ID, Nombre, etc.)
-      setUser(currentUser);
+      setUser(usuarioFormateado);
 
-      // 4. Verificamos si necesita cambio de contraseña
-      // Usamos el estado que vino del login O el del usuario encontrado
-      const estadoUsuario = loginData.estado || currentUser.estado;
-      const esPrimerLogin = estadoUsuario === "Inactivo";
+      // 3. Lógica de Redirección
+      // Si el backend dice explícitamente "Inactivo", activamos la bandera
+      const esInactivo = response.estado === "Inactivo";
 
-      return { success: true, requirePasswordChange: esPrimerLogin };
+      return { success: true, requirePasswordChange: esInactivo };
     } catch (error) {
-      console.error(error);
+      // CÁMBIALO POR ESTO:
+      console.log("Intento de login fallido"); // Solo para ti en la consola
       return { success: false };
     }
   };
 
   const changePassword = async (nuevaContrasena: string) => {
-    // Necesitamos el ID que obtuvimos en el paso 2 del signIn
-    if (!user || !user.id) throw new Error("No hay ID de usuario");
+    if (!user || !user.id) throw new Error("No se encontró el ID del usuario");
 
     try {
+      // Usamos el ID que ya guardamos en el estado 'user'
       await authApi.updatePassword(user.id, nuevaContrasena);
-      // Al cambiarla, asumimos que ya es Activo
+
+      // Actualizamos el estado localmente a "Activo" para que no pida cambio otra vez
       setUser({ ...user, estado: "Activo" });
     } catch (error) {
       throw error;
@@ -75,11 +80,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Esto exporta el hook directamente desde aquí
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth debe usarse dentro de un AuthProvider");
-  }
+  if (!context) throw new Error("useAuth debe usarse dentro de AuthProvider");
   return context;
 };

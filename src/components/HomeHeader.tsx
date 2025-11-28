@@ -16,9 +16,7 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
   const { user, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
 
-  // NOTA: Aquí forzamos el nombre "José Fernando" como pediste.
-  // En producción, podrías volver a usar: user?.nombre || "Usuario"
-  const nombreMostrar = "José Fernando";
+  const nombreMostrar = user?.nombre || "Mesero";
 
   const handleLogout = () => {
     Alert.alert("Cerrar Sesión", "¿Salir?", [

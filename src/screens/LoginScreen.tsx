@@ -53,7 +53,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         setError("Usuario o contraseña incorrectos");
       }
     } catch (err) {
-      console.error(err);
+      // ✅ PON ESTO:
+      console.log(err); // Esto solo lo ves tú en la terminal, el usuario no ve nada feo
       setError("Ocurrió un error inesperado");
     } finally {
       setLoading(false);

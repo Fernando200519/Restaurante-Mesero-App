@@ -48,9 +48,7 @@ export default function ChangePasswordScreen({
       // (Eliminamos el console.log y el setTimeout)
       await changePassword(newPass);
 
-      // Si no da error, pasamos a la siguiente pantalla
-      // Asegúrate que en tu navegación se llame "MesasScreen" o "Mesas"
-      navigation.replace("MesasScreen");
+      navigation.replace("Mesas");
     } catch (error) {
       console.error(error);
     } finally {
