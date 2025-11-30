@@ -1,14 +1,12 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-// Importamos los tipos que definiremos en App.tsx
-import { RootStackParamList } from "../App"; // Asumiendo que App.tsx está un nivel arriba
+import { RootStackParamList } from "../App";
 
 // Tipamos las props de esta pantalla
 type ComandaScreenProps = NativeStackScreenProps<RootStackParamList, "Comanda">;
 
 const ComandaScreen: React.FC<ComandaScreenProps> = ({ route }) => {
-  // Obtenemos los parámetros pasados desde MesasScreen
   const { mesaId, numeroMesa, numComensales } = route.params;
 
   return (

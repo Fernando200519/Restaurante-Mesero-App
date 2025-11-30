@@ -9,6 +9,7 @@ export interface Usuario {
   correo: string;
   tipo: string; // "Mesero"
   estado: string; // "Activo" | "Inactivo"
+  avatarUrl?: string;
 }
 
 // Esta es la estructura EXACTA de la respuesta de tu backend al hacer Login

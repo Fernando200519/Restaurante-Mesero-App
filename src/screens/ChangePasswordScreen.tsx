@@ -7,10 +7,12 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  TouchableOpacity, // Importamos TouchableOpacity
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons"; // Importamos iconos
 
 import Input from "../components/Input";
 import Button from "../components/Button";
@@ -21,13 +23,17 @@ import { useAuth } from "../context/AuthContext";
 
 interface ChangePasswordScreenProps {
   navigation: NativeStackNavigationProp<any>;
+  route: any; // Agregamos route para leer los parámetros
 }
 
 export default function ChangePasswordScreen({
   navigation,
+  route,
 }: ChangePasswordScreenProps) {
-  // 👇 2. Extraemos también la función changePassword
   const { user, changePassword } = useAuth();
+
+  const canGoBack = route.params?.canGoBack || false;
+
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,13 +50,10 @@ export default function ChangePasswordScreen({
 
     setLoading(true);
     try {
-      // 👇 3. Lógica REAL conectada a la API
-      // (Eliminamos el console.log y el setTimeout)
       await changePassword(newPass);
-
       navigation.replace("Mesas");
     } catch (error) {
-      console.error(error);
+      console.log(error);
     } finally {
       setLoading(false);
     }
@@ -66,6 +69,15 @@ export default function ChangePasswordScreen({
           style={styles.container}
         >
           <View style={styles.innerContainer}>
+            {/* 🟢 BOTÓN DE ATRÁS CONDICIONAL 🟢 */}
+            {canGoBack && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={28} color="#333" />
+              </TouchableOpacity>
+            )}
             <View style={styles.header}>
               <Text style={styles.title}>Configura tu contraseña</Text>
               <Text style={styles.subtitle}>
@@ -196,5 +208,13 @@ const styles = StyleSheet.create({
     right: 0,
     height: 56,
     backgroundColor: "transparent",
+  },
+  // Estilo para el botón de atrás
+  backButton: {
+    position: "absolute",
+    top: 20, // Ajusta según tu gusto
+    left: 0,
+    zIndex: 10,
+    padding: 10,
   },
 });

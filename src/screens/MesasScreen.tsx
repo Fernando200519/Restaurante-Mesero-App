@@ -50,7 +50,7 @@ export default function MesasScreen({ navigation }: any) {
       <HomeHeader navigation={navigation} />
 
       <View style={styles.headerContainer}>
-        {/* Solo dejamos el BUSCADOR */}
+        {/* Buscador */}
         <View style={styles.searchBar}>
           <Ionicons
             name="search"
@@ -71,11 +71,9 @@ export default function MesasScreen({ navigation }: any) {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* 🗑️ ELIMINADO: statsRow completo */}
       </View>
 
-      {/* Zonas (Sin cambios, solo el estilo container ajustado) */}
+      {/* Zonas */}
       <View style={{ height: 50, marginTop: 10 }}>
         <FlatList
           data={zonas}
@@ -105,7 +103,7 @@ export default function MesasScreen({ navigation }: any) {
         />
       </View>
 
-      {/* Grid de Mesas (Sin cambios) */}
+      {/* Grid de Mesas */}
       {loading && mesas.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#FA9623" />
@@ -146,11 +144,9 @@ const styles = StyleSheet.create({
 
   headerContainer: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4, // Reduje padding bottom ya que no hay stats
+    paddingTop: 8,
+    paddingBottom: 8,
     backgroundColor: "#fff",
-    // Quitamos borde inferior aquí para que fluya con las zonas si quieres,
-    // o déjalo si prefieres separación.
   },
   searchBar: {
     flexDirection: "row",

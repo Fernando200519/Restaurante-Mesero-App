@@ -6,6 +6,7 @@ interface AvatarProps {
   online?: boolean;
   avatarUrl?: string | null;
   size?: number; // ✅ Nuevo: permite cambiar el tamaño fácilmente
+  showBadge?: boolean; // 🆕 AGREGAMOS ESTA PROPIEDAD
 }
 
 export default function Avatar({
@@ -13,6 +14,7 @@ export default function Avatar({
   online = false,
   avatarUrl,
   size = 40, // Tamaño estándar cómodo para touch
+  showBadge = true,
 }: AvatarProps) {
   // Generación de iniciales segura
   const initials = nombre
@@ -48,19 +50,27 @@ export default function Avatar({
         </View>
       )}
 
-      {/* Indicador de Estado (Dot) */}
-      <View
-        style={[
-          styles.dot,
-          {
-            width: dotSize,
-            height: dotSize,
-            borderRadius: dotSize,
-            backgroundColor: online ? "#4CAF50" : "#BDBDBD", // Verde éxito o Gris
-            borderWidth: Math.max(2, size * 0.05), // Borde blanco proporcional
-          },
-        ]}
-      />
+      {/* 👇 AQUÍ ESTABA EL ERROR:
+         Antes tenías un <View> aquí sin condición. Lo he borrado.
+         Solo dejamos este bloque que verifica "showBadge":
+      */}
+
+      {showBadge && (
+        <View
+          style={[
+            styles.statusDot,
+            {
+              backgroundColor: online ? "#4CAF50" : "#BDBDBD",
+              width: size * 0.3,
+              height: size * 0.3,
+              borderRadius: size * 0.15,
+              // Ajustamos el borde dinámicamente según el tamaño
+              borderWidth: Math.max(2, size * 0.05),
+              borderColor: "#FFFFFF",
+            },
+          ]}
+        />
+      )}
     </View>
   );
 }
@@ -86,5 +96,12 @@ const styles = StyleSheet.create({
     bottom: -2,
     borderColor: "#FFFFFF",
     zIndex: 1, // Asegura que flote encima
+  },
+  statusDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    borderWidth: 2,
+    borderColor: "#FFFFFF", // Borde blanco para que se separe de la foto
   },
 });
