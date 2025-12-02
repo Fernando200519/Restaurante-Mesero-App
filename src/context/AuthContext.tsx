@@ -12,6 +12,8 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; requirePasswordChange?: boolean }>;
   changePassword: (nuevaContrasena: string) => Promise<void>;
   signOut: () => void;
+  // 👇 AGREGAR ESTA NUEVA FUNCIÓN A LA INTERFAZ
+  updateUserPhoto: (newUrl: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -19,6 +21,14 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
+
+  // 👇 AGREGAR ESTA FUNCIÓN
+  const updateUserPhoto = (newUrl: string) => {
+    if (user) {
+      // Creamos una copia del usuario con la nueva foto
+      setUser({ ...user, avatarUrl: newUrl }); // Asegúrate que tu tipo Usuario tenga 'avatarUrl' (o 'fotoUrl' según como lo hayas llamado)
+    }
+  };
 
   const signIn = async (correo: string, contrasena: string) => {
     try {
@@ -28,20 +38,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       setToken(response.token);
 
-      // 2. Mapeo de datos (Aquí arreglamos lo "raro")
-      // Tu backend devuelve los datos personales dentro de 'infoUsuario',
-      // pero el 'estado' viene afuera. Aquí unimos todo.
-      const usuarioFormateado: Usuario = {
+      // 2. Mapeo de datos
+      const usuarioLogueado: Usuario = {
         id: response.infoUsuario.id,
         nombre: response.infoUsuario.nombre,
         apellidoPaterno: response.infoUsuario.apellidoPaterno,
         apellidoMaterno: response.infoUsuario.apellidoMaterno,
         tipo: response.infoUsuario.tipo,
-        estado: response.estado, // Tomamos el estado de la raíz
-        correo: correo, // Usamos el correo que escribió el usuario (porque infoUsuario no lo trae)
+        estado: response.estado,
+        correo: correo, // El del input
+
+        // 👇 ¡ESTO ES LO QUE FALTABA!
+        // Mapeamos 'fotoUrl' (del JSON) a 'avatarUrl' (de tu App)
+        avatarUrl: response.infoUsuario.fotoUrl,
       };
 
-      setUser(usuarioFormateado);
+      setUser(usuarioLogueado);
 
       // 3. Lógica de Redirección
       // Si el backend dice explícitamente "Inactivo", activamos la bandera
@@ -56,13 +68,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const changePassword = async (nuevaContrasena: string) => {
-    if (!user || !user.id) throw new Error("No se encontró el ID del usuario");
+    // Validamos que tengamos todo lo necesario
+    if (!user || !user.id) throw new Error("No hay ID de usuario");
+    if (!token) throw new Error("No hay token de sesión"); // 👈 Validación extra
 
     try {
-      // Usamos el ID que ya guardamos en el estado 'user'
-      await authApi.updatePassword(user.id, nuevaContrasena);
+      // 👇 PASAMOS EL TOKEN AQUÍ
+      await authApi.updatePassword(user.id, nuevaContrasena, token);
 
-      // Actualizamos el estado localmente a "Activo" para que no pida cambio otra vez
+      // Actualizamos estado local
       setUser({ ...user, estado: "Activo" });
     } catch (error) {
       throw error;
@@ -77,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     // 👇 2. AGREGAMOS 'token' AL VALUE DEL PROVIDER
     <AuthContext.Provider
-      value={{ user, token, signIn, changePassword, signOut }}
+      value={{ user, token, signIn, changePassword, signOut, updateUserPhoto }}
     >
       {children}
     </AuthContext.Provider>

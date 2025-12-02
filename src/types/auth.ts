@@ -12,17 +12,15 @@ export interface Usuario {
   avatarUrl?: string;
 }
 
-// Esta es la estructura EXACTA de la respuesta de tu backend al hacer Login
-// (Basado en tu captura donde aparece "infoUsuario")
 export interface LoginResponse {
   token: string;
-  estado: string; // Viene en la raíz
+  estado: string;
   infoUsuario: {
-    // Objeto anidado
     id: number;
     nombre: string;
     apellidoPaterno: string;
     apellidoMaterno: string;
     tipo: string;
+    fotoUrl?: string; // 👈 ¡AGREGA ESTA LÍNEA!
   };
 }

@@ -68,7 +68,7 @@ export default function MesaCard({
               nombre={mesa.mesero?.nombre || "Mesero"}
               online={mesa.mesero?.online}
               avatarUrl={mesa.mesero?.avatarUrl}
-              size={40}
+              size={45}
             />
           </View>
         )}

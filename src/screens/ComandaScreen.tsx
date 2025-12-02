@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,17 +12,20 @@ import {
   Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { mesasApi } from "../api/mesasApi"; // 👈 Para arreglar 'Cannot find name mesasApi'
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
+import { useAuth } from "../context/AuthContext";
 
-// Definimos la estructura local de un Comensal para esta pantalla
+// 1. ACTUALIZA LA INTERFAZ (Arriba del archivo)
 interface ComensalLocal {
   id: number;
   nombre: string;
   total: number;
   itemsCount: number;
+  items: any[]; // 👈 NUEVO: Guardamos los productos reales
 }
 
 interface Props {
@@ -30,11 +34,14 @@ interface Props {
 }
 
 export default function ComandaScreen({ navigation, route }: Props) {
+  // 👇 1. ARREGLO PARA 'Cannot find name token'
+  const { token } = useAuth();
   // Recibimos los parámetros del Modal de Apertura
-  const { mesaId, numeroMesa, numComensales } = route.params as {
+  const { mesaId, numeroMesa, numComensales, orderId } = route.params as {
     mesaId: string;
     numeroMesa: number;
     numComensales: number;
+    orderId: number; // 👈 Asegúrate que esto esté aquí
   };
 
   const [comensales, setComensales] = useState<ComensalLocal[]>([]);
@@ -54,9 +61,10 @@ export default function ComandaScreen({ navigation, route }: Props) {
       for (let i = 1; i <= numComensales; i++) {
         nuevos.push({
           id: i,
-          nombre: `Comensal ${i}`, // Nombre por defecto
+          nombre: `Comensal ${i}`,
           total: 0,
           itemsCount: 0,
+          items: [], // 👈 AGREGA ESTO TAMBIÉN AQUÍ SI TE MARCA ERROR
         });
       }
       setComensales(nuevos);
@@ -84,19 +92,23 @@ export default function ComandaScreen({ navigation, route }: Props) {
     setEditModalVisible(false);
   };
 
+  // 2. Pasarlo al Menú
   const handleTomarOrden = (comensal: ComensalLocal) => {
     navigation.navigate("MenuProductos", {
       comensalId: comensal.id,
       comensalNombre: comensal.nombre,
       mesaId: parseInt(mesaId),
+      orderId: orderId, // 👈 ¡ESTO FALTABA! Sin esto, el menú no sabe qué orden es.
     });
   };
-
-  // Renderizado de cada Tarjeta de Comensal
+  // 3. ACTUALIZA EL RENDERIZADO (Función renderComensal)
   const renderComensal = ({ item }: { item: ComensalLocal }) => (
     <View style={styles.card}>
-      {/* Encabezado de la tarjeta */}
+      {/* Header del Card (Igual que antes) */}
       <View style={styles.cardHeader}>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="person" size={20} color="#FA9623" />
+        </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={styles.cardName}>{item.nombre}</Text>
@@ -107,29 +119,116 @@ export default function ComandaScreen({ navigation, route }: Props) {
               <Ionicons name="pencil" size={14} color="#9E9E9E" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.cardStatus}>
-            {item.itemsCount === 0
-              ? "Sin ordenar"
-              : `${item.itemsCount} artículos`}
-          </Text>
+          <Text style={styles.cardTotal}>${item.total.toFixed(2)}</Text>
         </View>
-        <Text style={styles.cardTotal}>${item.total.toFixed(2)}</Text>
       </View>
 
-      {/* Botón de Acción Principal */}
+      {/* 👇 LISTA DE PRODUCTOS DEL COMENSAL */}
+      <View style={styles.itemsList}>
+        {item.items.length === 0 ? (
+          <Text style={styles.emptyText}>Sin ordenar</Text>
+        ) : (
+          item.items.map((prod: any, index: number) => (
+            <View key={index} style={styles.itemRow}>
+              <Text style={styles.itemName}>1x {prod.producto}</Text>
+
+              {/* Badge de Estado Azulito */}
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>
+                  {prod.estado || "Solicitado"}
+                </Text>
+              </View>
+
+              {/* Hora (Solo la hora HH:MM) */}
+              <Text style={styles.timeText}>
+                {prod.fechaHoraInicioEstado
+                  ? new Date(prod.fechaHoraInicioEstado).toLocaleTimeString(
+                      [],
+                      { hour: "2-digit", minute: "2-digit" }
+                    )
+                  : "--:--"}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* Botón de Acción (Igual) */}
       <TouchableOpacity
         style={styles.actionButton}
         onPress={() => handleTomarOrden(item)}
       >
         <Ionicons
-          name="restaurant-outline"
+          name="add-circle-outline"
           size={18}
           color="#FFF"
           style={{ marginRight: 6 }}
         />
-        <Text style={styles.actionButtonText}>Tomar Orden</Text>
+        <Text style={styles.actionButtonText}>Agregar productos</Text>
       </TouchableOpacity>
     </View>
+  );
+
+  const fetchOrdenActual = async () => {
+    if (!orderId || !token) return;
+
+    try {
+      const itemsBackend = await mesasApi.getDetalleOrden(orderId, token);
+
+      // 1. Obtener nombres únicos de comensales que YA pidieron
+      const nombresConPedido = Array.from(
+        new Set(itemsBackend.map((i: any) => i.comensal))
+      );
+
+      // 2. Fusionar con los comensales locales (por si hay nuevos que aun no piden)
+      setComensales((prevComensales) => {
+        // Creamos un mapa para fácil acceso
+        const mapaActual = new Map(prevComensales.map((c) => [c.nombre, c]));
+
+        // Aseguramos que todos los del backend existan en nuestra lista local
+        nombresConPedido.forEach((nombre) => {
+          if (!mapaActual.has(nombre as string)) {
+            // Si el backend trae un nombre nuevo (ej. "Pedrito"), lo agregamos
+            mapaActual.set(nombre as string, {
+              id: Date.now() + Math.random(), // ID temporal
+              nombre: nombre as string,
+              total: 0,
+              itemsCount: 0,
+              items: [], // 👈 ¡ESTA ES LA LÍNEA QUE TE FALTABA!
+            });
+          }
+        });
+
+        return Array.from(mapaActual.values()).map((c) => {
+          const susItems = itemsBackend.filter(
+            (i: any) => i.comensal === c.nombre
+          );
+
+          const totalDinero = susItems.reduce(
+            (sum: number, item: any) => sum + (item.total || 0),
+            0
+          );
+          const cantidadItems = susItems.length;
+
+          return {
+            ...c,
+            total: totalDinero,
+            itemsCount: cantidadItems,
+            items: susItems, // 👈 GUARDAMOS LA LISTA AQUÍ
+          };
+        });
+      });
+    } catch (error) {
+      console.log("Error cargando orden", error);
+    }
+  };
+
+  // 👇 2. ARREGLO PARA "Función gris / no usada"
+  // Esto le dice a la app: "Cada vez que entres a esta pantalla, ejecuta fetchOrdenActual"
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrdenActual();
+    }, [orderId, token]) // Se ejecuta si cambia el ID o el token
   );
 
   return (
@@ -204,6 +303,15 @@ export default function ComandaScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // 👇 AGREGA ESTO DENTRO DE TU StyleSheet:
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFF3E0", // Naranja muy clarito
+    justifyContent: "center",
+    alignItems: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
@@ -322,6 +430,45 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 16,
     marginBottom: 20,
+  },
+  itemsList: {
+    marginVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    paddingTop: 10,
+  },
+  itemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  itemName: {
+    fontSize: 14,
+    color: "#333",
+    flex: 1,
+  },
+  statusBadge: {
+    backgroundColor: "#E3F2FD", // Azulito claro
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  statusText: {
+    color: "#2196F3", // Azul fuerte
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  timeText: {
+    fontSize: 12,
+    color: "#999",
+  },
+  emptyText: {
+    fontSize: 12,
+    color: "#CCC",
+    fontStyle: "italic",
+    marginBottom: 10,
   },
   modalButtons: {
     flexDirection: "row",

@@ -20,6 +20,7 @@ import HomeHeader from "../components/HomeHeader";
 import TableOpeningModal from "../components/TableOpeningModal";
 import { useAuth } from "../context/AuthContext";
 import { mesasApi } from "../api/mesasApi";
+import TableDetailsModal from "../components/TableDetailsModal"; // 👈 Importar
 
 export default function MesasScreen({ navigation }: any) {
   const { token, user } = useAuth(); // Necesitamos user.id para el empleadoId
@@ -28,9 +29,10 @@ export default function MesasScreen({ navigation }: any) {
   const [zonaActual, setZonaActual] = useState<string>("");
   const [busqueda, setBusqueda] = useState<string>("");
 
-  // 👇 Estados para manejar el Modal
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
-  const [isModalVisible, setModalVisible] = useState(false);
+  // Estados de Modales
+  const [isOpeningModalVisible, setOpeningModalVisible] = useState(false); // Modal de Apertura (Verde)
+  const [isDetailsModalVisible, setDetailsModalVisible] = useState(false); // Modal de Detalles (Rojo)
 
   // 2. Calculamos zonas SIN agregar "Todas"
   const zonas = useMemo(() => {
@@ -59,25 +61,30 @@ export default function MesasScreen({ navigation }: any) {
     });
   }, [mesas, zonaActual, busqueda]);
 
-  // 👇 LÓGICA MODIFICADA
   const handlePressMesa = (m: Mesa) => {
-    // Si la mesa está OCUPADA, vamos directo a la comanda (ya no hay que abrirla)
-    // Asumo que tu estado 2 es Ocupada, ajusta esto a tu lógica real
-    if (m.estado === "ocupada") {
-      navigation.navigate("Comanda", {
-        mesaId: m.id,
-        numeroMesa: parseInt(m.id),
-        // numComensales lo sacarías de la mesa si el backend te lo da
-      });
-      return;
-    }
-
-    // Si la mesa está LIBRE, abrimos el modal para asignarla
     setSelectedMesa(m);
-    setModalVisible(true);
+
+    if (m.estado === "ocupada") {
+      // SI ESTÁ OCUPADA -> Abrimos el nuevo modal de detalles
+      setDetailsModalVisible(true);
+    } else {
+      // SI ESTÁ LIBRE -> Abrimos el modal de apertura (comensales)
+      setOpeningModalVisible(true);
+    }
   };
 
-  // src/screens/MesasScreen.tsx
+  // Función para ir a la comanda desde el modal de detalles
+  const handleNavigateToComanda = () => {
+    setDetailsModalVisible(false);
+    if (selectedMesa) {
+      navigation.navigate("Comanda", {
+        mesaId: selectedMesa.id,
+        numeroMesa: parseInt(selectedMesa.id),
+        numComensales: selectedMesa.ocupantes,
+        orderId: selectedMesa.orderId, // ¡Importante!
+      });
+    }
+  };
 
   const handleConfirmOpen = async (mesaId: number, comensales: number) => {
     // Validaciones de seguridad
@@ -88,7 +95,6 @@ export default function MesasScreen({ navigation }: any) {
 
     try {
       // 1. CAPTURAR LA RESPUESTA DE LA API
-      // Al ocupar la mesa, el backend te devuelve la orden creada (con su ID)
       const nuevaOrden = await mesasApi.ocuparMesa(
         mesaId,
         user.id,
@@ -96,7 +102,9 @@ export default function MesasScreen({ navigation }: any) {
         token
       );
 
-      setModalVisible(false);
+      // 👇 AQUÍ ESTABA EL ERROR: Usamos el nuevo nombre del estado
+      setOpeningModalVisible(false);
+
       setSelectedMesa(null);
 
       // 2. USAR ESE DATO EN LA NAVEGACIÓN
@@ -104,16 +112,13 @@ export default function MesasScreen({ navigation }: any) {
         mesaId: mesaId.toString(),
         numeroMesa: mesaId,
         numComensales: comensales,
-
-        // 👇 CORRECCIÓN: Usamos el ID que nos acaba de dar el backend
-        // (Asegúrate de que tu backend devuelve { id: ... } o { orderId: ... })
-        // Si tu backend devuelve el objeto orden completo, suele ser .id o .orderId
         orderId: nuevaOrden.id || nuevaOrden.orderId,
       });
 
       refresh();
     } catch (error) {
-      // ...
+      console.error(error);
+      Alert.alert("Error", "No se pudo abrir la mesa.");
     }
   };
 
@@ -207,12 +212,20 @@ export default function MesasScreen({ navigation }: any) {
           }
         />
       )}
-      {/* 👇 AQUÍ RENDERIZAMOS EL MODAL FLOTANTE */}
+      {/* Modal de Apertura (Libre) */}
       <TableOpeningModal
-        visible={isModalVisible}
+        visible={isOpeningModalVisible}
         mesa={selectedMesa}
-        onClose={() => setModalVisible(false)}
+        onClose={() => setOpeningModalVisible(false)}
         onConfirm={handleConfirmOpen}
+      />
+
+      {/* Modal de Detalles (Ocupada) */}
+      <TableDetailsModal
+        visible={isDetailsModalVisible}
+        mesa={selectedMesa}
+        onClose={() => setDetailsModalVisible(false)}
+        onManageOrder={handleNavigateToComanda}
       />
     </SafeAreaView>
   );

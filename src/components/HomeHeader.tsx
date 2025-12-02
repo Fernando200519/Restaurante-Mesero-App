@@ -16,8 +16,8 @@ import { useAuth } from "../context/AuthContext";
 import { authApi } from "../api/authApi";
 
 export default function HomeHeader({ navigation }: { navigation: any }) {
-  // 👇 1. Extraemos el 'token' también
-  const { user, token, signOut } = useAuth();
+  // 👇 1. Extraemos la nueva función
+  const { user, token, signOut, updateUserPhoto } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -65,6 +65,11 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
           await authApi.updateProfilePicture(user.id, selectedUri, token);
 
           console.log("Foto actualizada en servidor");
+
+          // 👇 2. ¡AQUÍ ESTÁ LA MAGIA!
+          // Actualizamos el usuario global para que el Header principal también cambie
+          // y la foto persista al navegar.
+          updateUserPhoto(selectedUri);
         }
       } catch (error) {
         console.error(error);
@@ -159,10 +164,11 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
                 <View style={styles.avatarContainer}>
                   <Avatar
                     nombre={nombreMostrar}
-                    // 👇 AHORA SÍ USAMOS showBadge EN FALSE
-                    showBadge={false}
+                    // Usa la imagen local si acaba de subir una, SINO usa la del usuario (backend)
+                    // La URL del backend viene en 'user.avatarUrl'
                     avatarUrl={localImage || user?.avatarUrl}
                     size={60}
+                    showBadge={false}
                   />
 
                   {/* BOTÓN DE CÁMARA FLOTANTE */}

@@ -145,4 +145,24 @@ export const mesasApi = {
       throw error;
     }
   },
+  getDetalleOrden: async (orderId: number, token: string): Promise<any[]> => {
+    try {
+      // Usamos la ruta /details que mostraste en la imagen
+      const response = await fetch(`${API_URL}/orders/${orderId}/details`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error("Error al obtener detalles");
+
+      // La respuesta es un array directo segun tu imagen
+      return await response.json();
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  },
 };

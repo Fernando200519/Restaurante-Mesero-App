@@ -136,13 +136,16 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
         {
           text: "OK",
           onPress: () => {
-            // Regresamos a la pantalla de Comanda (Gestión de Comensales)
-            // Esto limpiará el stack de menú y resumen
+            // OPCIÓN A (Recomendada): Volver a la pantalla de Comensales
+            // Usamos 'navigate' asegurándonos de pasar los mismos params clave
             navigation.navigate("Comanda", {
               mesaId,
-              orderId, // Mantenemos el ID por si pide otro comensal
-              refresh: Date.now(), // Trigger para recargar totales si lo implementas
+              orderId,
+              refresh: Date.now(), // Forzamos actualización
             });
+
+            // Opcional: Si quieres reiniciar el stack para que no puedan volver "atrás" al resumen
+            // navigation.dispatch(StackActions.pop(2));
           },
         },
       ]);

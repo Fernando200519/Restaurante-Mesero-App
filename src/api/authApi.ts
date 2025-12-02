@@ -18,15 +18,24 @@ export const authApi = {
 
   updatePassword: async (
     userId: number,
-    nuevaContrasena: string
+    nuevaContrasena: string,
+    token: string // 👈 1. AGREGAR ESTE PARÁMETRO
   ): Promise<void> => {
     const response = await fetch(`${BASE_URL}/users/${userId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contraseña: nuevaContrasena }), // ñ obligatoria
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`, // 👈 2. AGREGAR EL HEADER DE SEGURIDAD
+      },
+      body: JSON.stringify({ contraseña: nuevaContrasena }),
     });
 
-    if (!response.ok) throw new Error("Error al actualizar contraseña");
+    if (!response.ok) {
+      // Tip: Agrega esto para ver qué dice el servidor si falla
+      const errorText = await response.text();
+      console.log("Error Password:", errorText);
+      throw new Error("Error al actualizar contraseña");
+    }
   },
 
   updateProfilePicture: async (
@@ -34,49 +43,42 @@ export const authApi = {
     imageUri: string,
     token: string
   ): Promise<void> => {
-    // 1. Preparamos el FormData
     const formData = new FormData();
 
-    // Obtenemos el tipo de archivo (jpg/png) basado en la extensión o ponemos jpeg por defecto
-    const filename = imageUri.split("/").pop() || "profile.jpg";
+    // 1. Preparar el archivo
+    const filename = imageUri.split("/").pop() || "foto.jpg";
     const match = /\.(\w+)$/.exec(filename);
     const type = match ? `image/${match[1]}` : `image/jpeg`;
 
+    // React Native requiere este objeto específico para archivos
     const fileData = {
       uri: imageUri,
       name: filename,
       type: type,
-    };
+    } as any; // 'as any' para evitar quejas de TS con FormData
 
-    // 2. Agregamos los campos EXACTOS del Swagger
-    formData.append("FotoPerfil", fileData as any);
+    // 2. Agregar los campos EXACTOS del Swagger
+    formData.append("FotoPerfil", fileData);
+
+    // TRUCO IMPORTANTE: Envíalo como string "true", el backend lo interpretará
     formData.append("UpdateProfilePhoto", "true");
-
-    console.log("Enviando foto a:", `${BASE_URL}/users/${userId}`);
-    // console.log("Token usado:", token); // Descomenta si quieres verificar el token
 
     // 3. Petición
     const response = await fetch(`${BASE_URL}/users/${userId}`, {
       method: "PATCH",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-        // ¡IMPORTANTE! NO AGREGUES 'Content-Type': 'multipart/form-data' AQUÍ
-        // React Native lo agrega solo con el 'boundary' correcto. Si lo pones tú, falla.
+        Authorization: `Bearer ${token}`, // Tu token del Login
+        // ⛔ NO PONGAS 'Content-Type': 'multipart/form-data'
+        // Deja que fetch lo ponga solo, si lo pones tú, rompes la subida.
       },
       body: formData,
     });
 
-    // 4. Diagnóstico de errores
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Status Code:", response.status); // 👈 ESTO NOS DIRÁ QUÉ PASA
-      console.error("Respuesta del servidor:", errorText);
-
-      if (response.status === 413) throw new Error("La imagen es muy pesada");
-      if (response.status === 401) throw new Error("Token vencido o inválido");
-
-      throw new Error(`Error ${response.status}: No se pudo subir la imagen`);
+      console.error("Server Error:", errorText);
+      throw new Error(`Error ${response.status}: No se pudo subir la foto`);
     }
   },
 };

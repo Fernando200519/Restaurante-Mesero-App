@@ -47,10 +47,11 @@ interface Props {
 }
 
 export default function MenuProductosScreen({ navigation, route }: Props) {
-  const { comensalId, comensalNombre, mesaId } = route.params as {
+  const { comensalId, comensalNombre, mesaId, orderId } = route.params as {
     comensalId: number;
     comensalNombre: string;
     mesaId: number;
+    orderId: number; // 👈 Recibirlo
   };
   // 👇 1. OBTENER TOKEN
   const { token } = useAuth();
@@ -190,11 +191,13 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
   };
 
   const handleVerOrden = () => {
+    if (cart.length === 0) return;
     navigation.navigate("ResumenPedido", {
       cart: cart,
       comensalNombre: comensalNombre,
       comensalId: comensalId,
-      mesaId: mesaId || 0, // Pasarlo si lo tienes
+      mesaId: mesaId,
+      orderId: orderId, // 👈 Pasarlo al final
     });
   };
 
