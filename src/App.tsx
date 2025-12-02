@@ -9,6 +9,8 @@ import LoginScreen from "./screens/LoginScreen";
 import MesasScreen from "./screens/MesasScreen";
 import ComandaScreen from "./screens/ComandaScreen";
 import ChangePasswordScreen from "./screens/ChangePasswordScreen";
+import MenuProductosScreen from "./screens/MenuProductsScreen";
+import ResumenPedidoScreen from "./screens/ResumenPedidoScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -18,6 +20,13 @@ export type RootStackParamList = {
     mesaId: string;
     numeroMesa: number;
     numComensales: number;
+  };
+  MenuProductos: { comensalId: number; comensalNombre: string };
+  ResumenPedido: {
+    cart: any[];
+    comensalNombre: string;
+    comensalId: number;
+    mesaId: number; // Agregamos mesaId para saber a dónde volver
   };
 };
 
@@ -44,25 +53,30 @@ export default function App() {
             component={LoginScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="ChangePassword"
             component={ChangePasswordScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="Mesas"
             component={MesasScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="Comanda"
             component={ComandaScreen}
-            options={({ route }) => ({
-              title: `Mesa ${route.params.numeroMesa}`,
-            })}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="MenuProductos"
+            component={MenuProductosScreen}
+            options={{ headerShown: false }} // 👈 Importante para usar nuestro propio header
+          />
+          <Stack.Screen
+            name="ResumenPedido"
+            component={ResumenPedidoScreen}
+            options={{ headerShown: false }}
           />
         </Stack.Navigator>
       </NavigationContainer>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,21 +16,42 @@ import { useMesas } from "../hooks/useMesas";
 import MesaCard from "../components/MesaCard";
 import { Mesa } from "../types/mesa";
 import HomeHeader from "../components/HomeHeader";
+// 👇 Importamos el nuevo Modal
+import TableOpeningModal from "../components/TableOpeningModal";
+import { useAuth } from "../context/AuthContext";
+import { mesasApi } from "../api/mesasApi";
 
 export default function MesasScreen({ navigation }: any) {
+  const { token, user } = useAuth(); // Necesitamos user.id para el empleadoId
   const { mesas, loading, refresh } = useMesas();
-  const [zonaActual, setZonaActual] = useState<string>("Todas");
+  // 1. Iniciamos sin zona seleccionada
+  const [zonaActual, setZonaActual] = useState<string>("");
   const [busqueda, setBusqueda] = useState<string>("");
 
+  // 👇 Estados para manejar el Modal
+  const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+
+  // 2. Calculamos zonas SIN agregar "Todas"
   const zonas = useMemo(() => {
+    // Obtenemos zonas únicas
     const lista = Array.from(new Set(mesas.map((m) => m.zona || "General")));
-    return ["Todas", ...lista];
+    return lista.sort(); // Opcional: ordenarlas alfabéticamente
   }, [mesas]);
+
+  // 3. Efecto para seleccionar la primera zona automáticamente al cargar datos
+  useEffect(() => {
+    if (zonas.length > 0 && zonaActual === "") {
+      setZonaActual(zonas[0]);
+    }
+  }, [zonas, zonaActual]);
 
   const mesasFiltradas = useMemo(() => {
     return mesas.filter((m) => {
-      const matchZona =
-        zonaActual === "Todas" || (m.zona || "General") === zonaActual;
+      // 4. Filtro estricto: Solo mostramos la zona seleccionada
+      // (Quitamos la lógica de "Todas")
+      const matchZona = (m.zona || "General") === zonaActual;
+
       const matchTexto = m.nombre
         .toLowerCase()
         .includes(busqueda.toLowerCase());
@@ -37,12 +59,62 @@ export default function MesasScreen({ navigation }: any) {
     });
   }, [mesas, zonaActual, busqueda]);
 
-  const handleOpen = (m: Mesa) => {
-    navigation.navigate("Comanda", {
-      mesaId: m.id,
-      numeroMesa: parseInt(m.id),
-      numComensales: m.ocupantes,
-    });
+  // 👇 LÓGICA MODIFICADA
+  const handlePressMesa = (m: Mesa) => {
+    // Si la mesa está OCUPADA, vamos directo a la comanda (ya no hay que abrirla)
+    // Asumo que tu estado 2 es Ocupada, ajusta esto a tu lógica real
+    if (m.estado === "ocupada") {
+      navigation.navigate("Comanda", {
+        mesaId: m.id,
+        numeroMesa: parseInt(m.id),
+        // numComensales lo sacarías de la mesa si el backend te lo da
+      });
+      return;
+    }
+
+    // Si la mesa está LIBRE, abrimos el modal para asignarla
+    setSelectedMesa(m);
+    setModalVisible(true);
+  };
+
+  // src/screens/MesasScreen.tsx
+
+  const handleConfirmOpen = async (mesaId: number, comensales: number) => {
+    // Validaciones de seguridad
+    if (!token || !user || !user.id) {
+      Alert.alert("Error", "No estás autenticado correctamente.");
+      return;
+    }
+
+    try {
+      // 1. CAPTURAR LA RESPUESTA DE LA API
+      // Al ocupar la mesa, el backend te devuelve la orden creada (con su ID)
+      const nuevaOrden = await mesasApi.ocuparMesa(
+        mesaId,
+        user.id,
+        comensales,
+        token
+      );
+
+      setModalVisible(false);
+      setSelectedMesa(null);
+
+      // 2. USAR ESE DATO EN LA NAVEGACIÓN
+      navigation.navigate("Comanda", {
+        mesaId: mesaId.toString(),
+        numeroMesa: mesaId,
+        numComensales: comensales,
+
+        // 👇 CORRECCIÓN: Usamos el ID que nos acaba de dar el backend
+        // (Asegúrate de que tu backend devuelve { id: ... } o { orderId: ... })
+        // Si tu backend devuelve el objeto orden completo, suele ser .id o .orderId
+        orderId: nuevaOrden.id || nuevaOrden.orderId,
+      });
+
+      refresh();
+    } catch (error) {
+      // ...
+    }
   };
 
   return (
@@ -122,8 +194,9 @@ export default function MesasScreen({ navigation }: any) {
               tintColor="#FA9623"
             />
           }
+          // 👇 Aquí pasamos handlePressMesa en lugar de la lógica directa
           renderItem={({ item }) => (
-            <MesaCard mesa={item} onPress={handleOpen} />
+            <MesaCard mesa={item} onPress={handlePressMesa} />
           )}
           contentContainerStyle={styles.gridContent}
           ListEmptyComponent={
@@ -134,6 +207,13 @@ export default function MesasScreen({ navigation }: any) {
           }
         />
       )}
+      {/* 👇 AQUÍ RENDERIZAMOS EL MODAL FLOTANTE */}
+      <TableOpeningModal
+        visible={isModalVisible}
+        mesa={selectedMesa}
+        onClose={() => setModalVisible(false)}
+        onConfirm={handleConfirmOpen}
+      />
     </SafeAreaView>
   );
 }

@@ -4,6 +4,7 @@ import { authApi } from "../api/authApi";
 
 interface AuthContextType {
   user: Usuario | null;
+  token: string | null; // 👈 1. AGREGAMOS ESTO
   // La función signIn devuelve si fue éxito y si requiere cambio de pass
   signIn: (
     correo: string,
@@ -74,7 +75,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, changePassword, signOut }}>
+    // 👇 2. AGREGAMOS 'token' AL VALUE DEL PROVIDER
+    <AuthContext.Provider
+      value={{ user, token, signIn, changePassword, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

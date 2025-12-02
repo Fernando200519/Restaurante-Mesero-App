@@ -1,44 +1,38 @@
-// ==========================================
-// 1. LO QUE TU UI NECESITA (Tu estructura actual)
-// ==========================================
+// src/types/mesa.ts
+
 export type MesaEstado = "disponible" | "ocupada" | "esperando" | "agrupada";
 
-export interface Mesero {
-  id: string;
+// Definimos bien qué datos necesita el Mesero en la UI
+export interface MeseroUI {
   nombre: string;
   online: boolean;
-  avatarUrl?: string;
+  avatarUrl?: string; // 👈 La UI busca esto, no "imagen"
 }
 
 export interface Mesa {
-  id: string; // Tu UI usa string
+  id: string;
   nombre: string;
   capacidad: number;
   ocupantes: number;
   estado: MesaEstado;
-  zona?: string; // Tu UI espera el nombre "Terraza"
+  zona?: string;
+
+  // 👇 AGREGAMOS ESTAS DOS QUE FALTABAN PARA CORREGIR LOS ERRORES
   alerta?: boolean;
-  mesero?: Mesero | null;
+  mesero?: MeseroUI | null;
+  // 👇 ¡TE FALTABA ESTA LÍNEA AQUÍ!
+  orderId?: number;
 }
 
-// ==========================================
-// 2. LO QUE LLEGA DEL BACKEND (La realidad)
-// ==========================================
+// Interface del Backend (se queda igual, basada en tu captura)
 export interface MesaBackend {
   id: number;
-  estado: string; // "Libre", "Ocupada"
-  capacidad: number;
-  zonaId: number; // El backend da ID
-  fechaHoraInicio?: string | null;
-  totalCuentaActiva?: number | null;
-}
-
-export interface ZonaBackend {
-  id: number;
-  nombre: string;
+  nombreZona: string;
   estado: string;
-}
-
-export interface FormDataResponse {
-  zonas: ZonaBackend[];
+  capacidad: number;
+  comensales: number;
+  fotoPerfilMesero?: string;
+  esMeseroActivo?: boolean;
+  // 👇 AGREGAR ESTA LÍNEA:
+  orderId?: number;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,9 +13,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker"; // 📸 1. Importar librería
 import Avatar from "./Avatar";
 import { useAuth } from "../context/AuthContext";
+import { authApi } from "../api/authApi";
 
 export default function HomeHeader({ navigation }: { navigation: any }) {
-  const { user, signOut } = useAuth();
+  // 👇 1. Extraemos el 'token' también
+  const { user, token, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -26,9 +28,8 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
   const nombreMostrar = user?.nombre || "Mesero";
   const correoMostrar = user?.correo || "usuario@restaurante.com";
 
-  // 📸 3. Función para abrir la galería
   const pickImage = async () => {
-    // Pedir permisos (Expo lo maneja automático en versiones nuevas, pero por si acaso)
+    // 1. Permisos
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== "granted") {
@@ -39,17 +40,38 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
       return;
     }
 
+    console.log("Token:", token);
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, // Permite recortar la imagen (cuadrada)
+      // 👇 2. CORRECCIÓN DEL WARNING
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // 👈 Volvemos a Options
+      allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.5, // Calidad media para no saturar
+      quality: 0.5,
     });
 
+    // 3. SI EL USUARIO ELIGIÓ FOTO (Todo ocurre aquí adentro)
     if (!result.canceled) {
-      setLocalImage(result.assets[0].uri);
-      // AQUÍ IRÍA TU LÓGICA DE 'PATCH' MÁS ADELANTE:
-      // uploadImage(result.assets[0].uri);
+      const selectedUri = result.assets[0].uri;
+
+      // Actualización visual inmediata
+      setLocalImage(selectedUri);
+
+      // 👇 EL TRY/CATCH DEBE IR AQUÍ ADENTRO para conocer 'selectedUri'
+      try {
+        if (user && user.id && token) {
+          console.log("Subiendo foto...");
+
+          await authApi.updateProfilePicture(user.id, selectedUri, token);
+
+          console.log("Foto actualizada en servidor");
+        }
+      } catch (error) {
+        console.error(error);
+        Alert.alert("Error", "No se pudo guardar la foto.");
+        // Si falló la subida, quitamos la imagen local para no engañar al usuario
+        setLocalImage(null);
+      }
     }
   };
 

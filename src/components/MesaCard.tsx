@@ -48,7 +48,6 @@ export default function MesaCard({
             <Text style={styles.capacidadNum}>/{mesa.capacidad}</Text>
           </Text>
         </View>
-        <Text style={styles.zonaText}>{mesa.zona || "General"}</Text>
       </View>
 
       <View style={styles.footer}>
