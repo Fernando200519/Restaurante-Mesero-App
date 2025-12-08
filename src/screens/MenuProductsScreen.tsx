@@ -51,36 +51,40 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
     comensalId: number;
     comensalNombre: string;
     mesaId: number;
-    orderId: number; // 👈 Recibirlo
+    orderId: number;
   };
-  // 👇 1. OBTENER TOKEN
-  const { token } = useAuth();
 
-  // 👇 2. NUEVOS ESTADOS PARA DATOS REALES
+  const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
-
   const [search, setSearch] = useState("");
-  // 👇 3. CAMBIO IMPORTANTE: Ahora filtramos por ID (número), no por nombre
-  // 0 significará "Todas las categorías"
   const [activeCategoryId, setActiveCategoryId] = useState<number>(0);
-
-  // Estado local del Carrito (Solo para esta sesión de pedido)
   const [cart, setCart] = useState<CartItem[]>([]);
-
-  // Estados para el Modal
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [isModalVisible, setModalVisible] = useState(false);
+  const [notification, setNotification] = useState<{
+    visible: boolean;
+    message: string;
+  }>({
+    visible: false,
+    message: "",
+  });
 
-  // 👇 CARGAR DATOS REALES AL INICIAR
+  const showNotification = (message: string) => {
+    setNotification({ visible: true, message });
+
+    setTimeout(() => {
+      setNotification((prev) => ({ ...prev, visible: false }));
+    }, 1500);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       if (!token) return;
 
       setLoading(true);
       try {
-        // Pedimos categorías y productos al mismo tiempo (Paralelo)
         const [catsData, prodsData] = await Promise.all([
           productosApi.getCategorias(token),
           productosApi.getProductos(token),
@@ -98,57 +102,41 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
     loadData();
   }, [token]);
 
-  // 👇 FILTRADO ACTUALIZADO (Usando ID)
   const productosFiltrados = useMemo(() => {
-    // Usamos el estado 'productos' en lugar de 'PRODUCTOS_MOCK'
     return productos.filter((p) => {
-      // 1. Filtro por Categoría: Si es 0 (Todas) o coincide el ID
       const matchCat =
         activeCategoryId === 0 || p.categoryId === activeCategoryId;
-
-      // 2. Filtro por Buscador
       const matchText = p.nombre.toLowerCase().includes(search.toLowerCase());
 
-      // 3. Filtro de Estado (Opcional, pero recomendado)
       const matchEstado = p.estado === "Activo" || p.estado === "Activa";
 
       return matchCat && matchText && matchEstado;
     });
   }, [activeCategoryId, search, productos]);
 
-  // Cálculos del Carrito Flotante
   const cartTotal = cart.reduce(
     (acc, item) => acc + item.producto.precio * item.cantidad,
     0
   );
   const cartCount = cart.reduce((acc, item) => acc + item.cantidad, 0);
 
-  // --- LÓGICA MODIFICADA DE AGREGAR ---
   const handleAddPress = (producto: Producto) => {
     if (producto.esPersonalizable) {
-      // CASO B: Es personalizable -> Abrimos Modal
       setSelectedProduct(producto);
       setModalVisible(true);
     } else {
-      // CASO A: Es simple -> Agregamos directo (Lógica vieja)
       addToCartDirect(producto);
     }
   };
 
-  // Función para agregar al carrito (ya sea directo o desde modal)
   const addToCartDirect = (
     producto: Producto,
     opciones: any[] = [],
     precioFinal?: number
   ) => {
+    showNotification(`¡${producto.nombre} agregado!`);
     setCart((prev) => {
-      // NOTA IMPORTANTE: Si tiene opciones, se considera un item "nuevo" distinto
-      // para no mezclar una "Pizza con Piña" con una "Pizza sin Piña".
-
       const precioItem = precioFinal || producto.precio;
-
-      // Creamos un ID único temporal para el carrito basado en opciones
-      // (O simplemente agregamos siempre como nuevo item si tiene opciones)
       if (opciones.length > 0) {
         return [
           ...prev,
@@ -159,8 +147,6 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
           },
         ];
       }
-
-      // Si es simple, buscamos si ya existe para sumar cantidad
       const existente = prev.find(
         (item) =>
           item.producto.id === producto.id &&
@@ -178,13 +164,11 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
   };
 
   const handleConfirmCustomization = (
-    producto: any, // 👈 CAMBIO AQUÍ: Usa 'any' en lugar de 'Product'
+    producto: any,
     opciones: any[],
     precioFinal: number,
     notas: string
   ) => {
-    // Al usar 'any', TypeScript deja de comparar las propiedades una por una
-    // y confía en que el objeto que viene es el correcto.
     addToCartDirect(producto, opciones, precioFinal);
     setModalVisible(false);
     setSelectedProduct(null);
@@ -197,11 +181,12 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
       comensalNombre: comensalNombre,
       comensalId: comensalId,
       mesaId: mesaId,
-      orderId: orderId, // 👈 Pasarlo al final
+      orderId: orderId,
+      // 2. ✅ AGREGAMOS ESTO: Pasamos la función 'setCart' como parámetro
+      updateCart: (nuevoCarrito: CartItem[]) => setCart(nuevoCarrito),
     });
   };
 
-  // ✅ CORRECCIÓN: Usamos 'Producto' en el tipo del argumento
   const renderProduct = ({ item }: { item: Producto }) => (
     <View style={styles.card}>
       <Image
@@ -266,7 +251,6 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
       {/* CATEGORÍAS (Horizontal) */}
       <View>
         <FlatList
-          // 👇 Inyectamos la opción "Todas" (ID 0) manualmente al principio del array real
           data={[
             { id: 0, nombre: "Todas", descripcion: "", estado: "" },
             ...categorias,
@@ -276,7 +260,6 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.catList}
           renderItem={({ item }) => {
-            // Comparamos IDs
             const isActive = activeCategoryId === item.id;
             return (
               <TouchableOpacity
@@ -302,7 +285,6 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
         contentContainerStyle={styles.gridContent}
         columnWrapperStyle={{ justifyContent: "space-between" }}
         showsVerticalScrollIndicator={false}
-        // Espacio extra abajo para que el carrito flotante no tape el último item
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
       {/* 🛒 CARRITO FLOTANTE (Solo si hay items) */}
@@ -334,6 +316,14 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
               <Ionicons name="chevron-forward" size={20} color="#FFF" />
             </View>
           </TouchableOpacity>
+        </View>
+      )}
+      {notification.visible && (
+        <View style={styles.toastContainer}>
+          <View style={styles.toastContent}>
+            <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+            <Text style={styles.toastText}>{notification.message}</Text>
+          </View>
         </View>
       )}
       <ProductDetailsModal
@@ -489,4 +479,32 @@ const styles = StyleSheet.create({
   cartTotalText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
   cartAction: { flexDirection: "row", alignItems: "center" },
   cartActionText: { color: "#FFF", fontWeight: "600", marginRight: 4 },
+
+  toastContainer: {
+    position: "absolute",
+    bottom: 100, // Lo ponemos un poco arriba del carrito flotante
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 999, // Para que flote encima de todo
+  },
+  toastContent: {
+    backgroundColor: "rgba(50, 50, 50, 0.9)", // Fondo oscuro semitransparente
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25, // Forma de pastilla
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  toastText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    marginLeft: 8,
+    fontSize: 14,
+  },
 });

@@ -16,32 +16,55 @@ import { useMesas } from "../hooks/useMesas";
 import MesaCard from "../components/MesaCard";
 import { Mesa } from "../types/mesa";
 import HomeHeader from "../components/HomeHeader";
-// 👇 Importamos el nuevo Modal
 import TableOpeningModal from "../components/TableOpeningModal";
 import { useAuth } from "../context/AuthContext";
 import { mesasApi } from "../api/mesasApi";
-import TableDetailsModal from "../components/TableDetailsModal"; // 👈 Importar
+import TableDetailsModal from "../components/TableDetailsModal";
 
 export default function MesasScreen({ navigation }: any) {
-  const { token, user } = useAuth(); // Necesitamos user.id para el empleadoId
+  const { token, user } = useAuth();
   const { mesas, loading, refresh } = useMesas();
-  // 1. Iniciamos sin zona seleccionada
-  const [zonaActual, setZonaActual] = useState<string>("");
+  const [zonaActual, setZonaActual] = useState<string>("Todas");
   const [busqueda, setBusqueda] = useState<string>("");
-
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
-  // Estados de Modales
-  const [isOpeningModalVisible, setOpeningModalVisible] = useState(false); // Modal de Apertura (Verde)
-  const [isDetailsModalVisible, setDetailsModalVisible] = useState(false); // Modal de Detalles (Rojo)
+  const [isOpeningModalVisible, setOpeningModalVisible] = useState(false);
+  const [isDetailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [zonasPermitidas, setZonasPermitidas] = useState<string[]>([]);
+  // 👇 1. ESTADO LOCAL PARA SABER SI ESTAMOS REFRESCANDO TODO
+  const [refreshing, setRefreshing] = useState(false);
+  // 👇 2. FUNCIÓN PARA CARGAR ZONAS (La sacamos del useEffect)
+  const fetchZonas = async () => {
+    if (token) {
+      const nombres = await mesasApi.getZonasActivas(token);
+      setZonasPermitidas(nombres);
+    }
+  };
+  // 👇 3. EFECTO DE CARGA INICIAL
+  useEffect(() => {
+    fetchZonas();
+  }, [token]);
 
-  // 2. Calculamos zonas SIN agregar "Todas"
+  // 👇 4. FUNCIÓN MAESTRA DE REFRESCO (Une Mesas + Zonas)
+  const onRefresh = async () => {
+    setRefreshing(true); // Activamos spinner
+    try {
+      // Pedimos las dos cosas al mismo tiempo (Paralelo)
+      await Promise.all([
+        refresh(), // Recargar Mesas (del hook)
+        fetchZonas(), // Recargar Zonas (nuestra función nueva)
+      ]);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setRefreshing(false); // Apagamos spinner
+    }
+  };
+
   const zonas = useMemo(() => {
-    // Obtenemos zonas únicas
-    const lista = Array.from(new Set(mesas.map((m) => m.zona || "General")));
-    return lista.sort(); // Opcional: ordenarlas alfabéticamente
-  }, [mesas]);
+    if (zonasPermitidas.length === 0) return ["Todas"];
+    return ["Todas", ...zonasPermitidas.sort()];
+  }, [zonasPermitidas]);
 
-  // 3. Efecto para seleccionar la primera zona automáticamente al cargar datos
   useEffect(() => {
     if (zonas.length > 0 && zonaActual === "") {
       setZonaActual(zonas[0]);
@@ -50,30 +73,32 @@ export default function MesasScreen({ navigation }: any) {
 
   const mesasFiltradas = useMemo(() => {
     return mesas.filter((m) => {
-      // 4. Filtro estricto: Solo mostramos la zona seleccionada
-      // (Quitamos la lógica de "Todas")
-      const matchZona = (m.zona || "General") === zonaActual;
+      const zonaDeMesa = m.zona || "General";
 
+      const esZonaValida =
+        zonasPermitidas.includes(zonaDeMesa) || zonaDeMesa === "General";
+
+      if (!esZonaValida) return false;
+
+      const matchZona = zonaActual === "Todas" || zonaDeMesa === zonaActual;
       const matchTexto = m.nombre
         .toLowerCase()
         .includes(busqueda.toLowerCase());
+
       return matchZona && matchTexto;
     });
-  }, [mesas, zonaActual, busqueda]);
+  }, [mesas, zonaActual, busqueda, zonasPermitidas]);
 
   const handlePressMesa = (m: Mesa) => {
     setSelectedMesa(m);
 
     if (m.estado === "ocupada") {
-      // SI ESTÁ OCUPADA -> Abrimos el nuevo modal de detalles
       setDetailsModalVisible(true);
     } else {
-      // SI ESTÁ LIBRE -> Abrimos el modal de apertura (comensales)
       setOpeningModalVisible(true);
     }
   };
 
-  // Función para ir a la comanda desde el modal de detalles
   const handleNavigateToComanda = () => {
     setDetailsModalVisible(false);
     if (selectedMesa) {
@@ -81,20 +106,18 @@ export default function MesasScreen({ navigation }: any) {
         mesaId: selectedMesa.id,
         numeroMesa: parseInt(selectedMesa.id),
         numComensales: selectedMesa.ocupantes,
-        orderId: selectedMesa.orderId, // ¡Importante!
+        orderId: selectedMesa.orderId,
       });
     }
   };
 
   const handleConfirmOpen = async (mesaId: number, comensales: number) => {
-    // Validaciones de seguridad
     if (!token || !user || !user.id) {
       Alert.alert("Error", "No estás autenticado correctamente.");
       return;
     }
 
     try {
-      // 1. CAPTURAR LA RESPUESTA DE LA API
       const nuevaOrden = await mesasApi.ocuparMesa(
         mesaId,
         user.id,
@@ -102,12 +125,10 @@ export default function MesasScreen({ navigation }: any) {
         token
       );
 
-      // 👇 AQUÍ ESTABA EL ERROR: Usamos el nuevo nombre del estado
       setOpeningModalVisible(false);
 
       setSelectedMesa(null);
 
-      // 2. USAR ESE DATO EN LA NAVEGACIÓN
       navigation.navigate("Comanda", {
         mesaId: mesaId.toString(),
         numeroMesa: mesaId,
@@ -191,17 +212,23 @@ export default function MesasScreen({ navigation }: any) {
           keyExtractor={(i) => i.id.toString()}
           numColumns={2}
           showsVerticalScrollIndicator={false}
+          // 👇 AQUÍ ESTÁ EL CAMBIO EN EL REFRESH CONTROL
           refreshControl={
             <RefreshControl
-              refreshing={loading}
-              onRefresh={refresh}
+              // Usamos nuestro estado local 'refreshing' O el 'loading' inicial
+              refreshing={refreshing || loading}
+              // Usamos nuestra nueva función combinada
+              onRefresh={onRefresh}
               colors={["#FA9623"]}
               tintColor="#FA9623"
             />
           }
-          // 👇 Aquí pasamos handlePressMesa en lugar de la lógica directa
           renderItem={({ item }) => (
-            <MesaCard mesa={item} onPress={handlePressMesa} />
+            <MesaCard
+              mesa={item}
+              onPress={handlePressMesa}
+              showZona={zonaActual === "Todas"}
+            />
           )}
           contentContainerStyle={styles.gridContent}
           ListEmptyComponent={

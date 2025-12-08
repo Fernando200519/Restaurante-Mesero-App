@@ -14,10 +14,9 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
-import { mesasApi } from "../api/mesasApi"; // Importar API
-import { useAuth } from "../context/AuthContext"; // Importar Auth
+import { mesasApi } from "../api/mesasApi";
+import { useAuth } from "../context/AuthContext";
 
-// Reutilizamos tipos (idealmente deberías tenerlos en un archivo types.ts compartido)
 interface Product {
   id: number;
   nombre: string;
@@ -36,33 +35,31 @@ interface Props {
 }
 
 export default function ResumenPedidoScreen({ navigation, route }: Props) {
-  // 👇 1. Obtenemos user y token
   const { user, token } = useAuth();
-  // Recibimos los datos del Menú
   const {
     cart: initialCart,
     comensalNombre,
     mesaId,
-    orderId, // <--- ¡AGREGA ESTO!
+    orderId,
+    comensalId,
+    updateCart,
   } = route.params as {
     cart: CartItem[];
     comensalNombre: string;
     comensalId: number;
     mesaId: number;
-    orderId: number; // 👈 NECESITAMOS ESTO
+    orderId: number;
+    updateCart: (cart: CartItem[]) => void;
   };
 
   const [localCart, setLocalCart] = useState<CartItem[]>(initialCart);
   const [loading, setLoading] = useState(false);
 
-  // Cálculos dinámicos
   const subtotal = localCart.reduce(
     (acc, item) => acc + item.producto.precio * item.cantidad,
     0
   );
-  const total = subtotal; // Aquí podrías sumar IVA o propina si aplicara
-
-  // --- ACCIONES ---
+  const total = subtotal;
 
   const handleIncrement = (id: number) => {
     setLocalCart((prev) =>
@@ -78,7 +75,6 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
     setLocalCart((prev) =>
       prev.map((item) => {
         if (item.producto.id === id) {
-          // No bajamos de 1 aquí, para eso está el botón eliminar
           return { ...item, cantidad: Math.max(1, item.cantidad - 1) };
         }
         return item;
@@ -101,21 +97,22 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
   };
 
   const handleSeguirAgregando = () => {
-    // Simplemente volvemos atrás al menú
-    // Nota: Idealmente deberíamos pasar el carrito actualizado de vuelta,
-    // pero por simplicidad en este prototipo, solo volvemos.
+    // 1. Guardamos los cambios en la pantalla de abajo (Menú)
+    if (updateCart) {
+      updateCart(localCart);
+    }
+
+    // 2. Regresamos físicamente (rompiendo el bucle)
     navigation.goBack();
   };
 
   const handleEnviarCocina = async () => {
     if (localCart.length === 0) return;
 
-    // Validaciones de seguridad
     if (!token || !user || !user.id) {
       Alert.alert("Error", "No hay sesión activa");
       return;
     }
-    // Si no tenemos orderId (quizás la mesa se abrió mal), alertamos
     if (!orderId) {
       Alert.alert("Error", "No se identificó el número de orden.");
       return;
@@ -123,7 +120,6 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
 
     setLoading(true);
     try {
-      // 👇 2. LLAMADA REAL AL BACKEND
       await mesasApi.agregarProductosOrden(
         orderId,
         localCart,
@@ -136,16 +132,7 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
         {
           text: "OK",
           onPress: () => {
-            // OPCIÓN A (Recomendada): Volver a la pantalla de Comensales
-            // Usamos 'navigate' asegurándonos de pasar los mismos params clave
-            navigation.navigate("Comanda", {
-              mesaId,
-              orderId,
-              refresh: Date.now(), // Forzamos actualización
-            });
-
-            // Opcional: Si quieres reiniciar el stack para que no puedan volver "atrás" al resumen
-            // navigation.dispatch(StackActions.pop(2));
+            navigation.pop(2);
           },
         },
       ]);
@@ -156,8 +143,6 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
       setLoading(false);
     }
   };
-
-  // --- RENDER ---
 
   const renderItem = ({ item }: { item: CartItem }) => (
     <View style={styles.card}>
@@ -216,7 +201,7 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleSeguirAgregando}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />

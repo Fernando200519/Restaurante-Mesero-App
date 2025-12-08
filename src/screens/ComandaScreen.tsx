@@ -12,20 +12,19 @@ import {
   Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { mesasApi } from "../api/mesasApi"; // 👈 Para arreglar 'Cannot find name mesasApi'
+import { mesasApi } from "../api/mesasApi";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 
-// 1. ACTUALIZA LA INTERFAZ (Arriba del archivo)
 interface ComensalLocal {
   id: number;
   nombre: string;
   total: number;
   itemsCount: number;
-  items: any[]; // 👈 NUEVO: Guardamos los productos reales
+  items: any[];
 }
 
 interface Props {
@@ -34,29 +33,44 @@ interface Props {
 }
 
 export default function ComandaScreen({ navigation, route }: Props) {
-  // 👇 1. ARREGLO PARA 'Cannot find name token'
   const { token } = useAuth();
-  // Recibimos los parámetros del Modal de Apertura
   const { mesaId, numeroMesa, numComensales, orderId } = route.params as {
     mesaId: string;
     numeroMesa: number;
     numComensales: number;
-    orderId: number; // 👈 Asegúrate que esto esté aquí
+    orderId: number;
   };
 
   const [comensales, setComensales] = useState<ComensalLocal[]>([]);
-
-  // Estados para el Modal de Editar Nombre
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [editingComensalId, setEditingComensalId] = useState<number | null>(
     null
   );
   const [tempName, setTempName] = useState("");
 
-  // Al cargar, inicializamos los comensales (Simulación)
-  // NOTA: Aquí más adelante haremos un GET al backend para ver si ya existen
+  const calcularHaceCuanto = (fechaIso: string | null | undefined) => {
+    if (!fechaIso) return "--:--";
+
+    const fechaAjustada = fechaIso.endsWith("Z") ? fechaIso : fechaIso + "Z";
+    const inicio = new Date(fechaAjustada);
+    const ahora = new Date();
+    const diff = ahora.getTime() - inicio.getTime();
+
+    if (diff < 0) return "0 min";
+
+    const minutos = Math.floor(diff / 60000);
+
+    if (minutos < 60) return `${minutos} min`;
+
+    const horas = Math.floor(minutos / 60);
+    const minsRestantes = minutos % 60;
+    return `${horas}h ${minsRestantes}m`;
+  };
+
   useEffect(() => {
     const inicializarComensales = () => {
+      if (comensales.length > 0) return;
+
       const nuevos: ComensalLocal[] = [];
       for (let i = 1; i <= numComensales; i++) {
         nuevos.push({
@@ -64,23 +78,21 @@ export default function ComandaScreen({ navigation, route }: Props) {
           nombre: `Comensal ${i}`,
           total: 0,
           itemsCount: 0,
-          items: [], // 👈 AGREGA ESTO TAMBIÉN AQUÍ SI TE MARCA ERROR
+          items: [],
         });
       }
       setComensales(nuevos);
     };
 
     inicializarComensales();
-  }, [numComensales]);
+  }, [numComensales, comensales.length]);
 
-  // Función para abrir modal de editar nombre
   const openEditName = (id: number, currentName: string) => {
     setEditingComensalId(id);
     setTempName(currentName);
     setEditModalVisible(true);
   };
 
-  // Guardar nuevo nombre
   const saveName = () => {
     if (editingComensalId !== null && tempName.trim() !== "") {
       setComensales((prev) =>
@@ -92,31 +104,36 @@ export default function ComandaScreen({ navigation, route }: Props) {
     setEditModalVisible(false);
   };
 
-  // 2. Pasarlo al Menú
   const handleTomarOrden = (comensal: ComensalLocal) => {
     navigation.navigate("MenuProductos", {
       comensalId: comensal.id,
       comensalNombre: comensal.nombre,
       mesaId: parseInt(mesaId),
-      orderId: orderId, // 👈 ¡ESTO FALTABA! Sin esto, el menú no sabe qué orden es.
+      orderId: orderId,
     });
   };
-  // 3. ACTUALIZA EL RENDERIZADO (Función renderComensal)
   const renderComensal = ({ item }: { item: ComensalLocal }) => (
     <View style={styles.card}>
       {/* Header del Card (Igual que antes) */}
       <View style={styles.cardHeader}>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person" size={20} color="#FA9623" />
-        </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={styles.cardName}>{item.nombre}</Text>
+            {/* 👇 AHORA TODO ESTO ES BOTÓN */}
             <TouchableOpacity
               onPress={() => openEditName(item.id, item.nombre)}
-              style={styles.editIcon}
+              style={styles.nameClickable}
+              activeOpacity={0.6}
             >
-              <Ionicons name="pencil" size={14} color="#9E9E9E" />
+              <Text style={styles.cardName} numberOfLines={1}>
+                {item.nombre}
+              </Text>
+
+              <Ionicons
+                name="pencil"
+                size={14}
+                color="#9E9E9E"
+                style={{ marginLeft: 6 }}
+              />
             </TouchableOpacity>
           </View>
           <Text style={styles.cardTotal}>${item.total.toFixed(2)}</Text>
@@ -130,24 +147,29 @@ export default function ComandaScreen({ navigation, route }: Props) {
         ) : (
           item.items.map((prod: any, index: number) => (
             <View key={index} style={styles.itemRow}>
-              <Text style={styles.itemName}>1x {prod.producto}</Text>
-
-              {/* Badge de Estado Azulito */}
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {prod.estado || "Solicitado"}
-                </Text>
+              {/* 1. Nombre */}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemName}>1x {prod.producto}</Text>
+                {/* Precio Unitario debajo del nombre */}
+                <Text style={styles.itemPriceSmall}>${prod.total}.00</Text>
               </View>
 
-              {/* Hora (Solo la hora HH:MM) */}
-              <Text style={styles.timeText}>
-                {prod.fechaHoraInicioEstado
-                  ? new Date(prod.fechaHoraInicioEstado).toLocaleTimeString(
-                      [],
-                      { hour: "2-digit", minute: "2-digit" }
-                    )
-                  : "--:--"}
-              </Text>
+              {/* 2. Estado y Tiempo (Columna derecha) */}
+              <View style={{ alignItems: "flex-end" }}>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>
+                    {prod.estado || "Solicitado"}
+                  </Text>
+                </View>
+
+                {/* Tiempo Transcurrido */}
+                <View style={styles.timeRow}>
+                  <Ionicons name="time-outline" size={12} color="#757575" />
+                  <Text style={styles.timeText}>
+                    Hace {calcularHaceCuanto(prod.fechaHoraInicioEstado)}
+                  </Text>
+                </View>
+              </View>
             </View>
           ))
         )}
@@ -174,61 +196,47 @@ export default function ComandaScreen({ navigation, route }: Props) {
 
     try {
       const itemsBackend = await mesasApi.getDetalleOrden(orderId, token);
-
-      // 1. Obtener nombres únicos de comensales que YA pidieron
-      const nombresConPedido = Array.from(
+      const nombresRegistrados = Array.from(
         new Set(itemsBackend.map((i: any) => i.comensal))
       );
+      const totalEspacios = Math.max(numComensales, nombresRegistrados.length);
 
-      // 2. Fusionar con los comensales locales (por si hay nuevos que aun no piden)
-      setComensales((prevComensales) => {
-        // Creamos un mapa para fácil acceso
-        const mapaActual = new Map(prevComensales.map((c) => [c.nombre, c]));
+      const listaFusionada: ComensalLocal[] = [];
 
-        // Aseguramos que todos los del backend existan en nuestra lista local
-        nombresConPedido.forEach((nombre) => {
-          if (!mapaActual.has(nombre as string)) {
-            // Si el backend trae un nombre nuevo (ej. "Pedrito"), lo agregamos
-            mapaActual.set(nombre as string, {
-              id: Date.now() + Math.random(), // ID temporal
-              nombre: nombre as string,
-              total: 0,
-              itemsCount: 0,
-              items: [], // 👈 ¡ESTA ES LA LÍNEA QUE TE FALTABA!
-            });
-          }
+      for (let i = 0; i < totalEspacios; i++) {
+        const nombreDelBackend = nombresRegistrados[i];
+
+        const nombreFinal = nombreDelBackend || `Comensal ${i + 1}`;
+
+        const susItems = nombreDelBackend
+          ? itemsBackend.filter(
+              (item: any) => item.comensal === nombreDelBackend
+            )
+          : [];
+
+        const totalDinero = susItems.reduce(
+          (sum: number, item: any) => sum + (item.total || 0),
+          0
+        );
+
+        listaFusionada.push({
+          id: i + 1,
+          nombre: nombreFinal,
+          total: totalDinero,
+          itemsCount: susItems.length,
+          items: susItems,
         });
-
-        return Array.from(mapaActual.values()).map((c) => {
-          const susItems = itemsBackend.filter(
-            (i: any) => i.comensal === c.nombre
-          );
-
-          const totalDinero = susItems.reduce(
-            (sum: number, item: any) => sum + (item.total || 0),
-            0
-          );
-          const cantidadItems = susItems.length;
-
-          return {
-            ...c,
-            total: totalDinero,
-            itemsCount: cantidadItems,
-            items: susItems, // 👈 GUARDAMOS LA LISTA AQUÍ
-          };
-        });
-      });
+      }
+      setComensales(listaFusionada);
     } catch (error) {
       console.log("Error cargando orden", error);
     }
   };
 
-  // 👇 2. ARREGLO PARA "Función gris / no usada"
-  // Esto le dice a la app: "Cada vez que entres a esta pantalla, ejecuta fetchOrdenActual"
   useFocusEffect(
     useCallback(() => {
       fetchOrdenActual();
-    }, [orderId, token]) // Se ejecuta si cambia el ID o el token
+    }, [orderId, token])
   );
 
   return (
@@ -303,12 +311,11 @@ export default function ComandaScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // 👇 AGREGA ESTO DENTRO DE TU StyleSheet:
   avatarContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#FFF3E0", // Naranja muy clarito
+    backgroundColor: "#FFF3E0",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -324,7 +331,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 10, // Ajuste extra si usas SafeAreaView con edges
+    paddingTop: 10,
   },
   backButton: {
     padding: 5,
@@ -372,15 +379,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  nameClickable: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
   cardName: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "bold",
     color: "#333",
+    maxWidth: 180,
   },
-  editIcon: {
-    marginLeft: 8,
-    padding: 4,
-  },
+
   cardStatus: {
     fontSize: 12,
     color: "#999",
@@ -440,29 +451,44 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-start", // Alineado arriba para que se vea ordenado
+    marginBottom: 12,
+    borderBottomWidth: 0.5, // Separador sutil
+    borderBottomColor: "#F0F0F0",
+    paddingBottom: 8,
   },
   itemName: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "500",
     color: "#333",
-    flex: 1,
+  },
+  itemPriceSmall: {
+    fontSize: 13,
+    color: "#2E7D32", // Verde dinero
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  timeText: {
+    fontSize: 11,
+    color: "#757575",
+    marginLeft: 4,
   },
   statusBadge: {
-    backgroundColor: "#E3F2FD", // Azulito claro
+    backgroundColor: "#E3F2FD",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
     marginRight: 8,
   },
   statusText: {
-    color: "#2196F3", // Azul fuerte
+    color: "#2196F3",
     fontSize: 10,
     fontWeight: "bold",
-  },
-  timeText: {
-    fontSize: 12,
-    color: "#999",
   },
   emptyText: {
     fontSize: 12,

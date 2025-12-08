@@ -2,11 +2,10 @@
 
 export type MesaEstado = "disponible" | "ocupada" | "esperando" | "agrupada";
 
-// Definimos bien qué datos necesita el Mesero en la UI
 export interface MeseroUI {
   nombre: string;
   online: boolean;
-  avatarUrl?: string; // 👈 La UI busca esto, no "imagen"
+  avatarUrl?: string;
 }
 
 export interface Mesa {
@@ -16,15 +15,12 @@ export interface Mesa {
   ocupantes: number;
   estado: MesaEstado;
   zona?: string;
-
-  // 👇 AGREGAMOS ESTAS DOS QUE FALTABAN PARA CORREGIR LOS ERRORES
   alerta?: boolean;
   mesero?: MeseroUI | null;
-  // 👇 ¡TE FALTABA ESTA LÍNEA AQUÍ!
   orderId?: number;
+  fechaInicio?: string | null;
 }
 
-// Interface del Backend (se queda igual, basada en tu captura)
 export interface MesaBackend {
   id: number;
   nombreZona: string;
@@ -33,6 +29,8 @@ export interface MesaBackend {
   comensales: number;
   fotoPerfilMesero?: string;
   esMeseroActivo?: boolean;
-  // 👇 AGREGAR ESTA LÍNEA:
   orderId?: number;
+  fechaInicio?: string | null;
+  ordenFechaHoraInicio?: string | null;
+  nombreMesero?: string;
 }
