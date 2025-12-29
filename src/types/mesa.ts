@@ -11,7 +11,6 @@ export interface MeseroUI {
 export interface Mesa {
   id: string;
   nombre: string;
-  capacidad: number;
   ocupantes: number;
   estado: MesaEstado;
   zona?: string;
@@ -23,14 +22,14 @@ export interface Mesa {
 
 export interface MesaBackend {
   id: number;
-  nombreZona: string;
+  zona: string;
   estado: string;
-  capacidad: number;
-  comensales: number;
-  fotoPerfilMesero?: string;
-  esMeseroActivo?: boolean;
-  orderId?: number;
-  fechaInicio?: string | null;
-  ordenFechaHoraInicio?: string | null;
-  nombreMesero?: string;
+  // capacidad: number;
+  comensales: number | null;
+  fotoPerfilMesero?: string | null;
+  meseroDisponible?: boolean;
+  nombreMesero?: string | null;
+  orderId?: number | null; // Por si acaso
+  ordenId?: number | null; // El que viene en tu JSON real
+  fechaHoraInicioOcupacion?: string | null;
 }

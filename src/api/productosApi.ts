@@ -4,31 +4,30 @@ import { Categoria, Producto } from "../types/producto";
 const API_URL = "http://137.184.191.81";
 
 export const productosApi = {
-  // 1. Obtener Categorías
   getCategorias: async (token: string): Promise<Categoria[]> => {
     try {
       const response = await fetch(`${API_URL}/categories`, {
-        // Ajusta si la ruta es distinta
         method: "GET",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
+      if (response.status === 401) throw new Error("Sesión expirada");
 
-      if (!response.ok) throw new Error("Error al cargar categorías");
-      return await response.json();
+      if (!response.ok) throw new Error("Error fetching categories");
+
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error(error);
-      return [];
+      console.error("Catch Categorías:", error);
+      throw error;
     }
   },
 
-  // 2. Obtener Productos
   getProductos: async (token: string): Promise<Producto[]> => {
     try {
       const response = await fetch(`${API_URL}/products`, {
-        // Ajusta si la ruta es distinta
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -36,11 +35,19 @@ export const productosApi = {
         },
       });
 
-      if (!response.ok) throw new Error("Error al cargar productos");
-      return await response.json();
+      if (response.status === 401) throw new Error("Sesión expirada");
+
+      if (!response.ok) throw new Error("Error fetching products");
+
+      const data = await response.json();
+
+      if (data.productos && Array.isArray(data.productos)) {
+        return data.productos;
+      }
+      return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error(error);
-      return [];
+      console.error("Catch Productos:", error);
+      throw error;
     }
   },
 };

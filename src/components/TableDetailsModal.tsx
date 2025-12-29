@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Pressable,
-  Platform,
   ActivityIndicator,
   Animated,
   Dimensions,
@@ -34,7 +33,7 @@ export default function TableDetailsModal({
   onManageOrder,
 }: Props) {
   const { token } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [tiempoInfo, setTiempoInfo] = useState<{
     inicio: string;
@@ -97,29 +96,33 @@ export default function TableDetailsModal({
   };
 
   useEffect(() => {
-    if (visible) {
+    if (visible && mesa) {
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
         damping: 20,
       }).start();
+      if (mesa.fechaInicio) calcularTiempo(mesa.fechaInicio);
+      else setTiempoInfo(null);
 
-      if (mesa) {
-        if (mesa.fechaInicio) calcularTiempo(mesa.fechaInicio);
-        else setTiempoInfo(null);
+      setItems([]);
 
-        if (mesa.orderId && token) {
-          setLoading(true);
-          mesasApi
-            .getDetalleOrden(mesa.orderId, token)
-            .then((data) => setItems(data))
-            .catch((err) => console.log(err))
-            .finally(() => setLoading(false));
-        }
+      if (mesa.orderId && token) {
+        setLoading(true);
+        mesasApi
+          .getDetalleOrden(mesa.orderId, token)
+          .then((data) => {
+            setItems(data || []);
+          })
+          .catch((err) => console.log(err))
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
       }
     } else {
       slideAnim.setValue(SCREEN_HEIGHT);
       setItems([]);
+      setLoading(false);
       setTiempoInfo(null);
     }
   }, [visible, mesa, token]);
@@ -279,14 +282,12 @@ export default function TableDetailsModal({
 }
 
 const styles = StyleSheet.create({
-  // 👇 CAMBIO 1: El contenedor ya no tiene fondo de color
   mainContainer: {
     flex: 1,
     justifyContent: "flex-end",
   },
-  // 👇 CAMBIO 2: El fondo es un elemento separado absoluto
   backdrop: {
-    ...StyleSheet.absoluteFillObject, // Ocupa toda la pantalla detrás
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
 

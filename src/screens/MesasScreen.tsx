@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,12 +17,13 @@ import MesaCard from "../components/MesaCard";
 import { Mesa } from "../types/mesa";
 import HomeHeader from "../components/HomeHeader";
 import TableOpeningModal from "../components/TableOpeningModal";
-import { useAuth } from "../context/AuthContext";
 import { mesasApi } from "../api/mesasApi";
 import TableDetailsModal from "../components/TableDetailsModal";
+import { useFocusEffect } from "@react-navigation/native";
+import { useAuth } from "../context/AuthContext";
 
 export default function MesasScreen({ navigation }: any) {
-  const { token, user } = useAuth();
+  const { token, user, signOut, refreshSession } = useAuth();
   const { mesas, loading, refresh } = useMesas();
   const [zonaActual, setZonaActual] = useState<string>("Todas");
   const [busqueda, setBusqueda] = useState<string>("");
@@ -30,33 +31,74 @@ export default function MesasScreen({ navigation }: any) {
   const [isOpeningModalVisible, setOpeningModalVisible] = useState(false);
   const [isDetailsModalVisible, setDetailsModalVisible] = useState(false);
   const [zonasPermitidas, setZonasPermitidas] = useState<string[]>([]);
-  // 👇 1. ESTADO LOCAL PARA SABER SI ESTAMOS REFRESCANDO TODO
   const [refreshing, setRefreshing] = useState(false);
-  // 👇 2. FUNCIÓN PARA CARGAR ZONAS (La sacamos del useEffect)
+
   const fetchZonas = async () => {
     if (token) {
       const nombres = await mesasApi.getZonasActivas(token);
       setZonasPermitidas(nombres);
     }
   };
-  // 👇 3. EFECTO DE CARGA INICIAL
+
   useEffect(() => {
     fetchZonas();
   }, [token]);
 
-  // 👇 4. FUNCIÓN MAESTRA DE REFRESCO (Une Mesas + Zonas)
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const performUpdate = async () => {
+        if (!isActive || !token) return;
+        try {
+          await refresh(true);
+          await fetchZonas();
+        } catch (error: any) {
+          console.log("🟡 Error detectado:", error.message);
+
+          if (error.message.includes("Sesión expirada")) {
+            console.log("🔄 Iniciando rescate de sesión...");
+
+            // 1. Intentamos obtener el nuevo token
+            const newToken = await refreshSession();
+
+            if (newToken && isActive) {
+              // 2. Reintentamos la petición usando el token recientito 🚀
+              await refresh(true, newToken);
+            } else if (!newToken) {
+              // Si no hubo token nuevo, cerramos todo
+              clearInterval(intervalId);
+              isActive = false;
+              signOut();
+              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+              Alert.alert(
+                "Sesión Expirada",
+                "Tu sesión ha terminado por seguridad."
+              );
+            }
+          }
+        }
+      };
+
+      performUpdate();
+
+      const intervalId = setInterval(performUpdate, 5000);
+
+      return () => {
+        isActive = false;
+        clearInterval(intervalId);
+      };
+    }, [refresh, token, signOut, refreshSession, navigation])
+  );
+
   const onRefresh = async () => {
-    setRefreshing(true); // Activamos spinner
+    setRefreshing(true);
     try {
-      // Pedimos las dos cosas al mismo tiempo (Paralelo)
-      await Promise.all([
-        refresh(), // Recargar Mesas (del hook)
-        fetchZonas(), // Recargar Zonas (nuestra función nueva)
-      ]);
+      await Promise.all([refresh(false), fetchZonas()]);
     } catch (error) {
       console.error(error);
     } finally {
-      setRefreshing(false); // Apagamos spinner
+      setRefreshing(false);
     }
   };
 
@@ -72,9 +114,8 @@ export default function MesasScreen({ navigation }: any) {
   }, [zonas, zonaActual]);
 
   const mesasFiltradas = useMemo(() => {
-    return mesas.filter((m) => {
+    const filtradas = mesas.filter((m) => {
       const zonaDeMesa = m.zona || "General";
-
       const esZonaValida =
         zonasPermitidas.includes(zonaDeMesa) || zonaDeMesa === "General";
 
@@ -86,6 +127,10 @@ export default function MesasScreen({ navigation }: any) {
         .includes(busqueda.toLowerCase());
 
       return matchZona && matchTexto;
+    });
+
+    return filtradas.sort((a, b) => {
+      return parseInt(a.id) - parseInt(b.id);
     });
   }, [mesas, zonaActual, busqueda, zonasPermitidas]);
 
@@ -212,12 +257,9 @@ export default function MesasScreen({ navigation }: any) {
           keyExtractor={(i) => i.id.toString()}
           numColumns={2}
           showsVerticalScrollIndicator={false}
-          // 👇 AQUÍ ESTÁ EL CAMBIO EN EL REFRESH CONTROL
           refreshControl={
             <RefreshControl
-              // Usamos nuestro estado local 'refreshing' O el 'loading' inicial
               refreshing={refreshing || loading}
-              // Usamos nuestra nueva función combinada
               onRefresh={onRefresh}
               colors={["#FA9623"]}
               tintColor="#FA9623"

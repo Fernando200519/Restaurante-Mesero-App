@@ -8,11 +8,11 @@ import {
   Pressable,
   Platform,
   Alert,
-  Animated, // 1. Importamos Animated
-  Dimensions, // 👈 Asegúrate de que esto esté importado
+  Animated,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Mesa } from "../types/mesa"; // Asegúrate que la ruta sea correcta
+import { Mesa } from "../types/mesa";
 
 interface Props {
   visible: boolean;
@@ -21,8 +21,6 @@ interface Props {
   onConfirm: (mesaId: number, comensales: number) => Promise<void>;
 }
 
-// 👇 ESTA LÍNEA ES LA QUE TE FALTA PARA 'SCREEN_HEIGHT'
-// Debes ponerla FUERA y ANTES de la función TableOpeningModal
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function TableOpeningModal({
@@ -31,43 +29,33 @@ export default function TableOpeningModal({
   onClose,
   onConfirm,
 }: Props) {
-  const [pax, setPax] = useState(2); // Por defecto sugerimos 2 personas
+  const [pax, setPax] = useState(2);
   const [loading, setLoading] = useState(false);
-
-  // 2. Variable para la animación (empieza abajo, fuera de la pantalla)
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
-  // Cada vez que abrimos el modal o cambiamos de mesa, reseteamos el contador
   useEffect(() => {
     if (visible) {
       setPax(2);
       setLoading(false);
-      // 3. Cuando se abre: Animamos hacia la posición 0 (subir)
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        damping: 20, // Rebote suave
+        damping: 20,
         stiffness: 90,
       }).start();
     } else {
-      // Cuando se cierra: Reseteamos la posición hacia abajo
       slideAnim.setValue(SCREEN_HEIGHT);
     }
   }, [visible, mesa]);
 
   if (!mesa) return null;
 
-  const maxCapacidad = mesa.capacidad || 4; // Fallback por si no viene el dato
-  const isMaxReached = pax >= maxCapacidad;
+  // 👇 YA NO USAMOS maxCapacidad NI isMaxReached
   const isMinReached = pax <= 1;
 
   const handleIncrement = () => {
-    if (!isMaxReached) setPax(pax + 1);
-    else
-      Alert.alert(
-        "Límite alcanzado",
-        `Esta mesa es solo para ${maxCapacidad} personas.`
-      );
+    // 👇 SIMPLEMENTE SUMAMOS (puedes poner un tope lógico como 50 si quieres)
+    setPax(pax + 1);
   };
 
   const handleDecrement = () => {
@@ -77,12 +65,11 @@ export default function TableOpeningModal({
   const handleConfirm = async () => {
     setLoading(true);
     await onConfirm(parseInt(mesa.id), pax);
-    // El loading se quita cuando el componente padre cierra el modal o navega
   };
 
   return (
     <Modal
-      animationType="fade" // 4. EL FONDO AHORA HACE FADE (no se mueve)
+      animationType="fade"
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
@@ -90,10 +77,7 @@ export default function TableOpeningModal({
       <Pressable style={styles.overlay} onPress={onClose}>
         {/* 5. Usamos Animated.View en lugar de Pressable normal para la tarjeta */}
         <Animated.View
-          style={[
-            styles.sheet,
-            { transform: [{ translateY: slideAnim }] }, // Aplicamos la animación
-          ]}
+          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
         >
           {/* Pressable vacío para atrapar los clicks y que no cierren el modal */}
           <Pressable style={{ width: "100%" }} onPress={() => {}}>
@@ -103,11 +87,11 @@ export default function TableOpeningModal({
             <View style={styles.header}>
               <View>
                 <Text style={styles.title}>{mesa.nombre}</Text>
+                {/* 👇 QUITAMOS "Capacidad: X" DEL SUBTÍTULO */}
                 <Text style={styles.subtitle}>
-                  Zona: {mesa.zona || "General"} • Capacidad: {maxCapacidad}
+                  Zona: {mesa.zona || "General"}
                 </Text>
               </View>
-              {/* Botón de Cerrar (Tachita) - Este es el rey ahora */}
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>
@@ -136,38 +120,22 @@ export default function TableOpeningModal({
                 </TouchableOpacity>
 
                 <View style={styles.numberContainer}>
-                  <Text
-                    style={[
-                      styles.paxNumber,
-                      isMaxReached && styles.paxNumberLimit,
-                    ]}
-                  >
-                    {pax}
-                  </Text>
+                  {/* 👇 QUITAMOS EL ESTILO ROJO DE LÍMITE */}
+                  <Text style={styles.paxNumber}>{pax}</Text>
                   <Text style={styles.paxLabel}>personas</Text>
                 </View>
 
+                {/* Botón Más (Sin disabled) */}
                 <TouchableOpacity
                   onPress={handleIncrement}
-                  style={[
-                    styles.counterBtn,
-                    isMaxReached && styles.counterBtnDisabled,
-                  ]}
-                  disabled={isMaxReached}
+                  style={styles.counterBtn} // Quitamos estilo disabled
+                  // disabled={isMaxReached} // ❌ BORRADO
                 >
-                  <Ionicons
-                    name="add"
-                    size={32}
-                    color={isMaxReached ? "#CCC" : "#555"}
-                  />
+                  <Ionicons name="add" size={32} color="#555" />
                 </TouchableOpacity>
               </View>
 
-              {isMaxReached && (
-                <Text style={styles.limitWarning}>
-                  ¡Capacidad máxima alcanzada!
-                </Text>
-              )}
+              {/* ❌ BORRAMOS EL MENSAJE DE ADVERTENCIA ROJO AQUÍ */}
             </View>
 
             {/* Botón de Acción */}
@@ -201,7 +169,7 @@ export default function TableOpeningModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)", // El fondo oscuro
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -211,20 +179,18 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
     width: "100%",
-    // Sombra para darle profundidad sobre el fondo oscuro
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 20,
   },
-  // dragHandle ELIMINADO de los estilos también
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10, // Un poquito de margen extra ahora que no hay rayita
+    marginTop: 10,
   },
   title: {
     fontSize: 24,

@@ -1,10 +1,10 @@
-// src/api/mesasApi.ts
 import { Mesa, MesaBackend } from "../types/mesa";
 
 const API_URL = "http://137.184.191.81";
 
 const adaptarMesa = (backendMesa: MesaBackend): Mesa => {
   let estadoUI: Mesa["estado"] = "disponible";
+
   const estadoBack = backendMesa.estado?.toUpperCase() || "LIBRE";
 
   if (estadoBack === "OCUPADA") estadoUI = "ocupada";
@@ -14,20 +14,21 @@ const adaptarMesa = (backendMesa: MesaBackend): Mesa => {
   return {
     id: backendMesa.id.toString(),
     nombre: `Mesa ${backendMesa.id}`,
-    capacidad: backendMesa.capacidad,
     ocupantes: backendMesa.comensales || 0,
     estado: estadoUI,
-    zona: backendMesa.nombreZona || "General",
+    zona: backendMesa.zona || "General",
     alerta: false,
-    mesero: backendMesa.fotoPerfilMesero
+
+    mesero: backendMesa.nombreMesero
       ? {
-          nombre: backendMesa.nombreMesero || "Mesero",
-          online: backendMesa.esMeseroActivo || false,
-          avatarUrl: backendMesa.fotoPerfilMesero,
+          nombre: backendMesa.nombreMesero,
+          online: backendMesa.meseroDisponible || false,
+          avatarUrl: backendMesa.fotoPerfilMesero || undefined,
         }
       : null,
-    orderId: backendMesa.orderId,
-    fechaInicio: backendMesa.ordenFechaHoraInicio,
+
+    orderId: backendMesa.orderId || backendMesa.ordenId || undefined,
+    fechaInicio: backendMesa.fechaHoraInicioOcupacion,
   };
 };
 
@@ -38,7 +39,7 @@ export const mesasApi = {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, //
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -50,8 +51,12 @@ export const mesasApi = {
       const mesasData: MesaBackend[] = await response.json();
 
       return mesasData.map(adaptarMesa);
-    } catch (error) {
-      console.error("Error en getMesas:", error);
+    } catch (error: any) {
+      if (error.message.includes("Sesión expirada")) {
+        console.log("🟡 Sesión expirada detectada en API (esperando refresh)");
+      } else {
+        console.error("Error en getMesas:", error);
+      }
       throw error;
     }
   },
@@ -69,9 +74,9 @@ export const mesasApi = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          empleadoId: empleadoId,
-          mesaId: mesaId,
+          mesasIds: [mesaId],
           comensales: comensales,
+          tipoOrden: "ComerAqui",
         }),
       });
 
@@ -79,7 +84,6 @@ export const mesasApi = {
         const errorText = await response.text();
         throw new Error("No se pudo ocupar la mesa: " + errorText);
       }
-
       return await response.json();
     } catch (error) {
       console.error("Error en ocuparMesa:", error);
@@ -93,12 +97,16 @@ export const mesasApi = {
     comensalNombre: string,
     token: string
   ): Promise<void> => {
-    const payload = items.map((item) => ({
-      productoId: item.producto.id,
-      empleadoId: empleadoId,
-      cantidad: item.cantidad,
+    const payload = {
       comensal: comensalNombre,
-    }));
+      orderDetailDTOs: items.map((item) => ({
+        productoId: item.producto.id,
+        cantidad: item.cantidad,
+        complementosIds: [],
+        exclusionProductoIds: [],
+        comentario: item.comentario || "",
+      })),
+    };
 
     try {
       const response = await fetch(`${API_URL}/orders/${orderId}/details`, {
@@ -162,7 +170,13 @@ export const mesasApi = {
       const data = await response.json();
 
       return data
-        .filter((z: any) => z.estado === "Activa")
+        .filter((z: any) => {
+          return (
+            z.estado === "Activa" &&
+            z.nombre !== "Sin zona" &&
+            z.nombre !== "Sin Zona"
+          );
+        })
         .map((z: any) => z.nombre);
     } catch (error) {
       console.error("Error cargando zonas:", error);

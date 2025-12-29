@@ -11,9 +11,11 @@ import ComandaScreen from "./screens/ComandaScreen";
 import ChangePasswordScreen from "./screens/ChangePasswordScreen";
 import MenuProductosScreen from "./screens/MenuProductsScreen";
 import ResumenPedidoScreen from "./screens/ResumenPedidoScreen";
+import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 
 export type RootStackParamList = {
   Login: undefined;
+  ForgotPassword: undefined;
   Mesas: undefined;
   ChangePassword: undefined;
   Comanda: {
@@ -26,7 +28,7 @@ export type RootStackParamList = {
     cart: any[];
     comensalNombre: string;
     comensalId: number;
-    mesaId: number; // Agregamos mesaId para saber a dónde volver
+    mesaId: number;
   };
 };
 
@@ -37,6 +39,7 @@ export default function App() {
     <AuthProvider>
       <NavigationContainer>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        {/* 👇 AGREGA ESTA LÍNEA */}
 
         <Stack.Navigator
           initialRouteName="Login"
@@ -51,6 +54,11 @@ export default function App() {
           <Stack.Screen
             name="Login"
             component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen
@@ -71,7 +79,7 @@ export default function App() {
           <Stack.Screen
             name="MenuProductos"
             component={MenuProductosScreen}
-            options={{ headerShown: false }} // 👈 Importante para usar nuestro propio header
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="ResumenPedido"

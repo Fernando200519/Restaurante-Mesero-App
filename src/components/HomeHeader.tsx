@@ -8,75 +8,105 @@ import {
   Alert,
   Modal,
   Pressable,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker"; // 📸 1. Importar librería
+import * as ImagePicker from "expo-image-picker";
 import Avatar from "./Avatar";
 import { useAuth } from "../context/AuthContext";
 import { authApi } from "../api/authApi";
 
 export default function HomeHeader({ navigation }: { navigation: any }) {
-  // 👇 1. Extraemos la nueva función
-  const { user, token, signOut, updateUserPhoto } = useAuth();
-  const [isOnline, setIsOnline] = useState(true);
+  const { user, token, signOut, updateUserPhoto, updateUserFields } = useAuth();
+  const [isOnline, setIsOnline] = useState(user?.estado === "Activo");
+
+  useEffect(() => {
+    setIsOnline(user?.estado === "Activo");
+  }, [user?.estado]);
 
   const [menuVisible, setMenuVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
 
-  // 📸 2. Estado local para mostrar la foto nueva inmediatamente (antes de subirla)
   const [localImage, setLocalImage] = useState<string | null>(null);
 
   const nombreMostrar = user?.nombre || "Mesero";
   const correoMostrar = user?.correo || "usuario@restaurante.com";
 
-  const pickImage = async () => {
-    // 1. Permisos
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const [newPhone, setNewPhone] = useState(user?.telefono || "");
 
+  useEffect(() => {
+    if (user?.telefono) {
+      setNewPhone(user.telefono);
+    }
+  }, [user]);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permiso denegado",
-        "Necesitamos acceso a tu galería para cambiar la foto."
-      );
+      Alert.alert("Permiso denegado", "Se requiere acceso a la galería.");
       return;
     }
 
-    console.log("Token:", token);
-
     const result = await ImagePicker.launchImageLibraryAsync({
-      // 👇 2. CORRECCIÓN DEL WARNING
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // 👈 Volvemos a Options
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
     });
 
-    // 3. SI EL USUARIO ELIGIÓ FOTO (Todo ocurre aquí adentro)
-    if (!result.canceled) {
+    if (!result.canceled && token) {
       const selectedUri = result.assets[0].uri;
-
-      // Actualización visual inmediata
       setLocalImage(selectedUri);
 
-      // 👇 EL TRY/CATCH DEBE IR AQUÍ ADENTRO para conocer 'selectedUri'
       try {
-        if (user && user.id && token) {
-          console.log("Subiendo foto...");
-
-          await authApi.updateProfilePicture(user.id, selectedUri, token);
-
-          console.log("Foto actualizada en servidor");
-
-          // 👇 2. ¡AQUÍ ESTÁ LA MAGIA!
-          // Actualizamos el usuario global para que el Header principal también cambie
-          // y la foto persista al navegar.
-          updateUserPhoto(selectedUri);
-        }
+        await authApi.updateUserProfile(token, { fotoUri: selectedUri });
+        updateUserPhoto(selectedUri);
+        Alert.alert("Éxito", "Foto actualizada.");
       } catch (error) {
         console.error(error);
-        Alert.alert("Error", "No se pudo guardar la foto.");
-        // Si falló la subida, quitamos la imagen local para no engañar al usuario
+        Alert.alert("Error", "No se pudo subir la foto.");
         setLocalImage(null);
       }
+    }
+  };
+
+  const toggleSwitch = async () => {
+    const nuevoEstadoBool = !isOnline;
+    const valorBackend = nuevoEstadoBool ? "Activo" : "NoDisponible";
+
+    setIsOnline(nuevoEstadoBool);
+
+    if (token) {
+      try {
+        await authApi.updateUserProfile(token, { estado: valorBackend });
+
+        updateUserFields({ estado: valorBackend });
+
+        console.log("Estado actualizado en el servidor:", valorBackend);
+      } catch (error) {
+        setIsOnline(!nuevoEstadoBool);
+        Alert.alert("Error", "No se pudo cambiar tu disponibilidad.");
+      }
+    }
+  };
+
+  const savePhone = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      await authApi.updateUserProfile(token, { telefono: newPhone });
+
+      updateUserFields({ telefono: newPhone });
+
+      setIsEditingPhone(false);
+      Alert.alert("Éxito", "Teléfono guardado.");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "No se pudo guardar el teléfono.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -106,10 +136,11 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
           activeOpacity={0.7}
           onPress={() => setMenuVisible(true)}
         >
+          {/* 👇 FIX: Use localImage if available, otherwise user's avatar */}
           <Avatar
             nombre={nombreMostrar}
             online={isOnline}
-            avatarUrl={user?.avatarUrl}
+            avatarUrl={localImage || user?.avatarUrl}
             size={44}
           />
         </TouchableOpacity>
@@ -133,19 +164,17 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
           <Switch
             trackColor={{ false: "#E0E0E0", true: "#DFF6E3" }}
             thumbColor={isOnline ? "#4CAF50" : "#f4f3f4"}
-            ios_backgroundColor="#3e3e3e"
-            onValueChange={() => setIsOnline(!isOnline)}
+            onValueChange={toggleSwitch}
             value={isOnline}
             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
           />
         </View>
-
         <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
           <Ionicons name="log-out-outline" size={24} color="#555" />
         </TouchableOpacity>
       </View>
 
-      {/* 🟢 MODAL DEL MENÚ DE PERFIL 🟢 */}
+      {/* MODAL DEL MENÚ */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -157,21 +186,16 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
           onPress={() => setMenuVisible(false)}
         >
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            {/* Cabecera Naranja */}
             <View style={styles.menuHeader}>
               <View style={styles.menuHeaderInfo}>
-                {/* 📸 4. CONTENEDOR DEL AVATAR CON CAMARITA */}
                 <View style={styles.avatarContainer}>
+                  {/* 👇 FIX: Also use localImage here in the modal */}
                   <Avatar
                     nombre={nombreMostrar}
-                    // Usa la imagen local si acaba de subir una, SINO usa la del usuario (backend)
-                    // La URL del backend viene en 'user.avatarUrl'
                     avatarUrl={localImage || user?.avatarUrl}
                     size={60}
                     showBadge={false}
                   />
-
-                  {/* BOTÓN DE CÁMARA FLOTANTE */}
                   <TouchableOpacity
                     style={styles.cameraBadge}
                     onPress={pickImage}
@@ -181,64 +205,82 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
                 </View>
                 <View style={{ marginLeft: 12 }}>
                   <Text style={styles.menuHeaderName}>{nombreMostrar}</Text>
-                  <Text style={styles.menuHeaderRole}>
-                    {user?.tipo || "Mesero"}
-                  </Text>
+                  <Text style={styles.menuHeaderRole}>{user?.tipo}</Text>
                   <Text style={styles.menuHeaderEmail}>{correoMostrar}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Opciones del Menú */}
             <View style={styles.menuBody}>
-              {/* Opción 1: Cambiar Contraseña */}
+              {/* Opción: Cambiar Contraseña */}
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={irACambiarPassword}
+                onPress={irACambiarPassword} // 👈 FIX: Use the declared function
               >
                 <View style={styles.menuItemIcon}>
                   <Ionicons name="lock-closed-outline" size={22} color="#555" />
                 </View>
                 <View style={styles.menuItemTextContainer}>
                   <Text style={styles.menuItemTitle}>Cambiar contraseña</Text>
-                  <Text style={styles.menuItemSubtitle}>
-                    Actualiza tu seguridad
-                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#CCC" />
               </TouchableOpacity>
 
               <View style={styles.divider} />
 
-              {/* Opción 2: Modo Oscuro (Dummy) */}
-              <TouchableOpacity style={styles.menuItem}>
+              {/* Opción: Editar Teléfono */}
+              <View style={styles.menuItem}>
                 <View style={styles.menuItemIcon}>
-                  <Ionicons name="moon-outline" size={22} color="#555" />
+                  <Ionicons name="call-outline" size={22} color="#555" />
                 </View>
-                <View style={styles.menuItemTextContainer}>
-                  <Text style={styles.menuItemTitle}>Aspecto</Text>
-                  <Text style={styles.menuItemSubtitle}>Modo claro</Text>
-                </View>
-                <View style={styles.badgeContainer}>
-                  <Text style={styles.badgeText}>Próximamente</Text>
-                </View>
-              </TouchableOpacity>
 
-              <View style={styles.divider} />
-
-              {/* Opción 3: Idioma (Dummy) */}
-              <TouchableOpacity style={styles.menuItem}>
-                <View style={styles.menuItemIcon}>
-                  <Ionicons name="globe-outline" size={22} color="#555" />
-                </View>
                 <View style={styles.menuItemTextContainer}>
-                  <Text style={styles.menuItemTitle}>Idioma</Text>
-                  <Text style={styles.menuItemSubtitle}>Español</Text>
+                  {!isEditingPhone ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <View>
+                        <Text style={styles.menuItemTitle}>Teléfono</Text>
+                        <Text style={styles.menuItemSubtitle}>
+                          {newPhone || "Sin número"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setIsEditingPhone(true)}>
+                        <Text style={{ color: "#FA9623", fontWeight: "bold" }}>
+                          Editar
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <TextInput
+                        style={styles.phoneInput}
+                        value={newPhone}
+                        onChangeText={setNewPhone}
+                        placeholder="55..."
+                        keyboardType="phone-pad"
+                        autoFocus
+                      />
+                      {loading ? (
+                        <ActivityIndicator size="small" color="#FA9623" />
+                      ) : (
+                        <TouchableOpacity
+                          onPress={savePhone}
+                          style={styles.saveBadge}
+                        >
+                          <Ionicons name="checkmark" size={16} color="#FFF" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
                 </View>
-                <View style={styles.badgeContainer}>
-                  <Text style={styles.badgeText}>Próximamente</Text>
-                </View>
-              </TouchableOpacity>
+              </View>
             </View>
           </Pressable>
         </Pressable>
@@ -247,6 +289,7 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
   );
 }
 
+// ... styles remain the same
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
@@ -273,8 +316,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusText: { fontSize: 10, fontWeight: "bold", marginRight: 6 },
-  iconButton: { padding: 8 },
-  // 👇 NUEVOS ESTILOS PARA EL MENÚ MODAL 👇
+  iconButton: { padding: 8 }, // 👇 NUEVOS ESTILOS PARA EL MENÚ MODAL 👇
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)", // Fondo oscuro semitransparente
@@ -299,8 +341,7 @@ const styles = StyleSheet.create({
   menuHeaderInfo: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  // 📸 ESTILOS DE LA CAMARITA
+  }, // 📸 ESTILOS DE LA CAMARITA
   avatarContainer: {
     position: "relative", // Necesario para que el hijo absolute se posicione respecto a esto
   },
@@ -373,5 +414,21 @@ const styles = StyleSheet.create({
     color: "#FA9623",
     fontSize: 10,
     fontWeight: "bold",
+  }, // 👇 ESTILOS DEL INPUT
+  phoneInput: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderColor: "#FA9623",
+    paddingVertical: 4,
+    fontSize: 16,
+    marginRight: 10,
+  },
+  saveBadge: {
+    backgroundColor: "#FA9623",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

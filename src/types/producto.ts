@@ -1,22 +1,35 @@
-// src/types/productos.ts
-
-export interface Categoria {
+export interface Complemento {
   id: number;
   nombre: string;
-  descripcion: string;
-  estado: string; // "Activa"
+  precio: number;
+}
+
+export interface IngredienteOpcional {
+  id: number;
+  nombre: string;
 }
 
 export interface Producto {
   id: number;
   nombre: string;
-  descripcion: string | null;
-  categoryId: number; // Esto conecta con la Categoria
+  descripcion: string;
+  categoryId: number;
   precio: number;
-  tipo: string; // "Individual"
-  estado: string; // "Activo"
-  imagen: string | null;
-
-  // Propiedades opcionales para lógica frontend (si las usas después)
+  tipo: string;
+  estado: string;
+  imagen: string;
+  complementos: Complemento[];
+  ingredientesOpcionales: IngredienteOpcional[];
   esPersonalizable?: boolean;
+}
+
+export interface Categoria {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  estado: string;
+  tipo: string;
+  categoriaPadreId?: number;
+  categoriaPadre?: string;
+  subcategorias?: string[] | Categoria[];
 }

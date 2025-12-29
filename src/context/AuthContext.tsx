@@ -1,19 +1,25 @@
-import React, { createContext, useState, useContext } from "react";
+import React, { createContext, useState, useContext, useEffect } from "react";
 import { Usuario } from "../types/auth";
 import { authApi } from "../api/authApi";
+import { storage } from "../utils/storage";
 
 interface AuthContextType {
   user: Usuario | null;
-  token: string | null; // 👈 1. AGREGAMOS ESTO
-  // La función signIn devuelve si fue éxito y si requiere cambio de pass
+  token: string | null;
+  refreshToken: string | null;
   signIn: (
     correo: string,
     contrasena: string
   ) => Promise<{ success: boolean; requirePasswordChange?: boolean }>;
-  changePassword: (nuevaContrasena: string) => Promise<void>;
+  changePassword: (
+    actual: string,
+    nueva: string,
+    confirmacion: string
+  ) => Promise<void>;
   signOut: () => void;
-  // 👇 AGREGAR ESTA NUEVA FUNCIÓN A LA INTERFAZ
   updateUserPhoto: (newUrl: string) => void;
+  updateUserFields: (fields: Partial<Usuario>) => void;
+  refreshSession: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -21,77 +27,152 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
 
-  // 👇 AGREGAR ESTA FUNCIÓN
+  const updateUserFields = (fields: Partial<Usuario>) => {
+    if (user) setUser({ ...user, ...fields });
+  };
+
   const updateUserPhoto = (newUrl: string) => {
-    if (user) {
-      // Creamos una copia del usuario con la nueva foto
-      setUser({ ...user, avatarUrl: newUrl }); // Asegúrate que tu tipo Usuario tenga 'avatarUrl' (o 'fotoUrl' según como lo hayas llamado)
-    }
+    updateUserFields({ avatarUrl: newUrl });
   };
 
   const signIn = async (correo: string, contrasena: string) => {
     try {
-      // 1. Petición al Backend
-      // authApi.login debe devolver Promise<LoginResponse>
-      const response = await authApi.login(correo, contrasena);
+      const loginData = await authApi.login(correo, contrasena);
 
-      setToken(response.token);
+      await storage.saveTokens(loginData.accessToken, loginData.refreshToken);
 
-      // 2. Mapeo de datos
+      setToken(loginData.accessToken);
+      setRefreshToken(loginData.refreshToken);
+
+      let datosUsuario = loginData.infoUsuario;
+
+      if (datosUsuario.estado !== "Inactivo") {
+        try {
+          const perfilEnriquecido = await authApi.getMe(loginData.accessToken);
+          datosUsuario = { ...datosUsuario, ...perfilEnriquecido };
+        } catch (perfilError) {
+          console.log("No se pudo enriquecer el perfil");
+        }
+      }
+
       const usuarioLogueado: Usuario = {
-        id: response.infoUsuario.id,
-        nombre: response.infoUsuario.nombre,
-        apellidoPaterno: response.infoUsuario.apellidoPaterno,
-        apellidoMaterno: response.infoUsuario.apellidoMaterno,
-        tipo: response.infoUsuario.tipo,
-        estado: response.estado,
-        correo: correo, // El del input
-
-        // 👇 ¡ESTO ES LO QUE FALTABA!
-        // Mapeamos 'fotoUrl' (del JSON) a 'avatarUrl' (de tu App)
-        avatarUrl: response.infoUsuario.fotoUrl,
+        id: datosUsuario.id,
+        nombre: datosUsuario.nombre,
+        apellidoPaterno: datosUsuario.apellidoPaterno,
+        apellidoMaterno: datosUsuario.apellidoMaterno,
+        tipo: datosUsuario.tipo,
+        estado: datosUsuario.estado,
+        correo: correo,
+        avatarUrl: datosUsuario.fotoUrl,
+        telefono: datosUsuario.telefono,
       };
 
       setUser(usuarioLogueado);
 
-      // 3. Lógica de Redirección
-      // Si el backend dice explícitamente "Inactivo", activamos la bandera
-      const esInactivo = response.estado === "Inactivo";
-
-      return { success: true, requirePasswordChange: esInactivo };
+      return {
+        success: true,
+        requirePasswordChange: usuarioLogueado.estado === "Inactivo",
+      };
     } catch (error) {
-      // CÁMBIALO POR ESTO:
-      console.log("Intento de login fallido"); // Solo para ti en la consola
+      console.error("Error en signIn:", error);
       return { success: false };
     }
   };
 
-  const changePassword = async (nuevaContrasena: string) => {
-    // Validamos que tengamos todo lo necesario
-    if (!user || !user.id) throw new Error("No hay ID de usuario");
-    if (!token) throw new Error("No hay token de sesión"); // 👈 Validación extra
-
+  const changePassword = async (
+    actual: string,
+    nueva: string,
+    confirmacion: string
+  ) => {
+    if (!user || !token) throw new Error("No hay sesión activa");
     try {
-      // 👇 PASAMOS EL TOKEN AQUÍ
-      await authApi.updatePassword(user.id, nuevaContrasena, token);
-
-      // Actualizamos estado local
-      setUser({ ...user, estado: "Activo" });
+      await authApi.updatePassword(actual, nueva, confirmacion, token);
+      updateUserFields({ estado: "Activo" });
     } catch (error) {
       throw error;
     }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    await storage.removeTokens();
     setUser(null);
     setToken(null);
+    setRefreshToken(null);
   };
 
+  const refreshSession = async (): Promise<string | null> => {
+    // Cambia boolean por string | null
+    if (!refreshToken) return null;
+
+    try {
+      console.log("🔄 Rotando tokens...");
+      const { accessToken: newAccess, refreshToken: newRefresh } =
+        await authApi.refreshToken(refreshToken);
+
+      await storage.saveTokens(newAccess, newRefresh);
+
+      setToken(newAccess);
+      setRefreshToken(newRefresh);
+
+      console.log("✅ ¡Sesión renovada con éxito! Nuevo token listo.");
+      return newAccess; // Devuelve el nuevo token
+    } catch (error) {
+      console.log("❌ Error en rotación. Cerrando sesión...");
+      await signOut();
+      return null;
+    }
+  };
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const storedAccess = await storage.getAccessToken();
+        const storedRefresh = await storage.getRefreshToken();
+
+        if (storedAccess && storedRefresh) {
+          setToken(storedAccess);
+          setRefreshToken(storedRefresh);
+
+          try {
+            const userData = await authApi.getMe(storedAccess);
+            setUser({
+              id: userData.id,
+              nombre: userData.nombre,
+              apellidoPaterno: userData.apellidoPaterno,
+              apellidoMaterno: userData.apellidoMaterno,
+              tipo: userData.tipo,
+              estado: userData.estado,
+              correo: userData.email || "",
+              avatarUrl: userData.fotoUrl,
+            });
+          } catch (e) {
+            const success = await refreshSession();
+            if (!success) await signOut();
+          }
+        }
+      } catch (error) {
+        console.error("Error al inicializar sesión:", error);
+      } finally {
+        // Aquí podrías desactivar un Splash Screen si lo tuvieras
+      }
+    };
+
+    initializeAuth();
+  }, []);
   return (
-    // 👇 2. AGREGAMOS 'token' AL VALUE DEL PROVIDER
     <AuthContext.Provider
-      value={{ user, token, signIn, changePassword, signOut, updateUserPhoto }}
+      value={{
+        user,
+        token,
+        refreshToken,
+        signIn,
+        changePassword,
+        signOut,
+        updateUserPhoto,
+        refreshSession,
+        updateUserFields,
+      }}
     >
       {children}
     </AuthContext.Provider>

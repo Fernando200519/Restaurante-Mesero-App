@@ -5,8 +5,8 @@ interface AvatarProps {
   nombre: string;
   online?: boolean;
   avatarUrl?: string | null;
-  size?: number; // ✅ Nuevo: permite cambiar el tamaño fácilmente
-  showBadge?: boolean; // 🆕 AGREGAMOS ESTA PROPIEDAD
+  size?: number;
+  showBadge?: boolean;
 }
 
 export default function Avatar({

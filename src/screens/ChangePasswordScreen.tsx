@@ -7,53 +7,83 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
-  TouchableOpacity, // Importamos TouchableOpacity
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons"; // Importamos iconos
+import { Ionicons } from "@expo/vector-icons";
 
 import Input from "../components/Input";
 import Button from "../components/Button";
-// Asegúrate de importar tu función de API real cuando la tengas
-// import { updatePasswordRequest } from "../api/authApi";
-
 import { useAuth } from "../context/AuthContext";
 
 interface ChangePasswordScreenProps {
   navigation: NativeStackNavigationProp<any>;
-  route: any; // Agregamos route para leer los parámetros
+  route: any;
 }
 
 export default function ChangePasswordScreen({
   navigation,
   route,
 }: ChangePasswordScreenProps) {
-  const { user, changePassword } = useAuth();
+  const { changePassword } = useAuth();
 
+  // Si canGoBack es true, significa que es un cambio VOLUNTARIO (desde el menú)
+  // Si es false, es el cambio OBLIGATORIO (primer login)
   const canGoBack = route.params?.canGoBack || false;
 
+  const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // 👇 DEFINIMOS LOS TEXTOS SEGÚN EL CONTEXTO
+  const screenTitle = canGoBack
+    ? "Cambiar Contraseña"
+    : "Configura tu contraseña";
+  const screenSubtitle = canGoBack
+    ? "Ingresa tu contraseña actual y define una nueva para actualizar tu seguridad."
+    : "Por seguridad, actualiza tu contraseña para continuar.";
 
   const isStrong = (pass: string) => {
     return pass.length >= 8 && /\d/.test(pass);
   };
 
   const passwordsMatch = newPass === confirmPass;
-  const isValid = isStrong(newPass) && passwordsMatch && newPass.length > 0;
+  const isValid =
+    currentPass.length > 0 &&
+    isStrong(newPass) &&
+    passwordsMatch &&
+    newPass.length > 0;
 
   const handleChangePassword = async () => {
     if (!isValid) return;
 
     setLoading(true);
     try {
-      await changePassword(newPass);
-      navigation.replace("Mesas");
-    } catch (error) {
+      await changePassword(currentPass, newPass, confirmPass);
+
+      Alert.alert("Éxito", "Contraseña actualizada correctamente", [
+        {
+          text: "OK",
+          onPress: () => {
+            // 👇 LÓGICA DE NAVEGACIÓN MEJORADA
+            if (canGoBack) {
+              navigation.goBack(); // Si vino del menú, regresa al menú
+            } else {
+              navigation.replace("Mesas"); // Si es login forzoso, entra al sistema
+            }
+          },
+        },
+      ]);
+    } catch (error: any) {
       console.log(error);
+      Alert.alert(
+        "Error",
+        error.message || "La contraseña actual es incorrecta o hubo un error."
+      );
     } finally {
       setLoading(false);
     }
@@ -69,7 +99,7 @@ export default function ChangePasswordScreen({
           style={styles.container}
         >
           <View style={styles.innerContainer}>
-            {/* 🟢 BOTÓN DE ATRÁS CONDICIONAL 🟢 */}
+            {/* BOTÓN DE ATRÁS CONDICIONAL */}
             {canGoBack && (
               <TouchableOpacity
                 style={styles.backButton}
@@ -78,20 +108,32 @@ export default function ChangePasswordScreen({
                 <Ionicons name="arrow-back" size={28} color="#333" />
               </TouchableOpacity>
             )}
+
             <View style={styles.header}>
-              <Text style={styles.title}>Configura tu contraseña</Text>
-              <Text style={styles.subtitle}>
-                Por seguridad, actualiza tu contraseña para continuar.
-              </Text>
+              {/* 👇 USAMOS LAS VARIABLES DINÁMICAS */}
+              <Text style={styles.title}>{screenTitle}</Text>
+              <Text style={styles.subtitle}>{screenSubtitle}</Text>
             </View>
 
             <View style={styles.form}>
+              <Input
+                placeholder="Contraseña actual"
+                icon="key-outline"
+                secureTextEntry
+                value={currentPass}
+                onChangeText={setCurrentPass}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
               <Input
                 placeholder="Nueva contraseña"
                 icon="lock-closed-outline"
                 secureTextEntry
                 value={newPass}
                 onChangeText={setNewPass}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <Input
@@ -100,6 +142,8 @@ export default function ChangePasswordScreen({
                 secureTextEntry
                 value={confirmPass}
                 onChangeText={setConfirmPass}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <View style={styles.validationContainer}>
@@ -117,7 +161,7 @@ export default function ChangePasswordScreen({
               </View>
 
               <Button
-                title="Cambiar Contraseña"
+                title={canGoBack ? "Actualizar" : "Comenzar"} // También cambiamos el botón un poco
                 onPress={handleChangePassword}
                 isLoading={loading}
                 style={!isValid ? styles.btnDisabled : undefined}

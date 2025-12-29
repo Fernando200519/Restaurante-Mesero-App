@@ -7,6 +7,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -14,14 +15,12 @@ import { StatusBar } from "expo-status-bar";
 
 import Input from "../components/Input";
 import Button from "../components/Button";
-import { Alert } from "react-native";
 import { useAuth } from "../context/AuthContext";
 
 interface LoginScreenProps {
   navigation: NativeStackNavigationProp<any>;
 }
 export default function LoginScreen({ navigation }: LoginScreenProps) {
-  // En tu input dice "Usuario", pero para la API es el correo
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,31 +29,27 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { signIn } = useAuth();
 
   const handleLogin = async () => {
-    // 1. Validaciones básicas antes de enviar
     if (!usuario || !password) {
       setError("Por favor ingresa usuario y contraseña");
       return;
     }
 
-    setLoading(true); // Activamos carga
-    setError(null); // Limpiamos errores previos
+    setLoading(true);
+    setError(null);
     try {
       const result = await signIn(usuario, password);
 
       if (result.success) {
         if (result.requirePasswordChange) {
-          // CORRECCIÓN 1: En App.tsx se llama "ChangePassword"
           navigation.replace("ChangePassword");
         } else {
-          // CORRECCIÓN 2: En App.tsx se llama "Mesas"
           navigation.replace("Mesas");
         }
       } else {
         setError("Usuario o contraseña incorrectos");
       }
     } catch (err) {
-      // ✅ PON ESTO:
-      console.log(err); // Esto solo lo ves tú en la terminal, el usuario no ve nada feo
+      console.log(err);
       setError("Ocurrió un error inesperado");
     } finally {
       setLoading(false);
@@ -105,6 +100,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 onPress={handleLogin}
                 isLoading={loading}
               />
+              <TouchableOpacity
+                onPress={() => navigation.navigate("ForgotPassword")}
+                style={styles.forgotButton}
+              >
+                <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -169,6 +170,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 5,
     textAlign: "center",
+    fontWeight: "600",
+  },
+  forgotButton: {
+    alignSelf: "center",
+    marginTop: 40,
+  },
+  forgotText: {
+    color: "#FA9623",
+    fontSize: 14,
     fontWeight: "600",
   },
 });
