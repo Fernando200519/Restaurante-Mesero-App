@@ -18,18 +18,25 @@ export interface Producto {
   tipo: string;
   estado: string;
   imagen: string;
-  complementos: Complemento[];
-  ingredientesOpcionales: IngredienteOpcional[];
+  complementos: Complemento[] | null;
+  ingredientesOpcionales: IngredienteOpcional[] | null;
   esPersonalizable?: boolean;
 }
 
 export interface Categoria {
   id: number;
   nombre: string;
-  descripcion?: string;
+  descripcion?: string | null;
   estado: string;
-  tipo: string;
-  categoriaPadreId?: number;
-  categoriaPadre?: string;
-  subcategorias?: string[] | Categoria[];
+  tipo: string | null;
+  categoriaPadre?: string | null;
+  subcategorias?: string[];
+}
+
+export interface CartItem {
+  producto: Producto;
+  cantidad: number;
+  opciones: any[];
+  notas: string;
+  precioFinal: number;
 }

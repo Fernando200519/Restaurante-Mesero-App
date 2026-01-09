@@ -1,33 +1,49 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Alert, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
+// Componentes y Tema
 import Input from "../components/Input";
 import Button from "../components/Button";
 import { authApi } from "../api/authApi";
+import { COLORS, SPACING } from "../constants/theme"; // ✅ Sincronizado con tu sistema
 
 export default function ForgotPasswordScreen({ navigation }: any) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
-    if (!email.includes("@")) {
-      Alert.alert("Error", "Ingresa un correo válido");
+    // Validación de ingeniería básica
+    if (!email.trim() || !email.includes("@")) {
+      Alert.alert(
+        "Formato Inválido",
+        "Por favor, ingresa un correo electrónico corporativo válido."
+      );
       return;
     }
 
     setLoading(true);
     try {
-      await authApi.requestPasswordReset(email);
+      await authApi.requestPasswordReset(email.trim());
       Alert.alert(
-        "Correo enviado",
-        "Revisa tu bandeja de entrada para restablecer tu contraseña.",
-        [{ text: "Volver al Login", onPress: () => navigation.goBack() }]
+        "Solicitud Enviada",
+        "Si el correo está registrado en Mesa Libre, recibirás un enlace de recuperación en unos minutos.",
+        [{ text: "Entendido", onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       Alert.alert(
-        "Error",
-        "No se pudo enviar la solicitud. Verifica el correo."
+        "Error de Conexión",
+        "No pudimos procesar tu solicitud. Verifica tu conexión a internet o intenta más tarde."
       );
     } finally {
       setLoading(false);
@@ -36,48 +52,127 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={styles.backBtn}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <Ionicons name="arrow-back" size={24} color="#333" />
-      </TouchableOpacity>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Botón Volver - Estilo consistente con ComandaScreen */}
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>Recuperar Contraseña</Text>
-        <Text style={styles.text}>
-          Ingresa tu correo electrónico y te enviaremos un enlace para
-          restablecer tu acceso.
-        </Text>
+          <View style={styles.header}>
+            {/* Elemento Visual de Marca */}
+            <View style={styles.iconContainer}>
+              <Ionicons name="key-outline" size={40} color={COLORS.primary} />
+            </View>
 
-        <Input
-          placeholder="Correo electrónico"
-          icon="mail-outline"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+            <Text style={styles.title}>¿Olvidaste tu contraseña?</Text>
+            <Text style={styles.subtitle}>
+              No te preocupes. Ingresa tu correo y te ayudaremos a recuperar tu
+              acceso al sistema de comandas.
+            </Text>
+          </View>
 
-        <Button
-          title="Enviar enlace"
-          onPress={handleSend}
-          isLoading={loading}
-        />
-      </View>
+          <View style={styles.form}>
+            <Input
+              placeholder="Correo electrónico"
+              icon="mail-outline"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <View style={styles.buttonWrapper}>
+              <Button
+                title="Enviar enlace de acceso"
+                onPress={handleSend}
+                isLoading={loading}
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.cancelLink}
+            >
+              <Text style={styles.cancelText}>Cancelar y volver al inicio</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFF", padding: 20 },
-  backBtn: { marginBottom: 20 },
-  content: { flex: 1, justifyContent: "center" },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-    marginBottom: 10,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  text: { fontSize: 15, color: "#757575", marginBottom: 30, lineHeight: 22 },
+  scrollContent: {
+    flexGrow: 1,
+    padding: SPACING.l,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: `${COLORS.primary}10`,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: SPACING.xl,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: SPACING.xl,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.primary}10`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: SPACING.l,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.text.primary,
+    textAlign: "center",
+    marginBottom: SPACING.s,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: SPACING.m,
+  },
+  form: {
+    flex: 1,
+    marginTop: SPACING.m,
+  },
+  buttonWrapper: {
+    marginTop: SPACING.m,
+  },
+  cancelLink: {
+    marginTop: SPACING.l,
+    alignItems: "center",
+  },
+  cancelText: {
+    color: COLORS.text.muted,
+    fontSize: 14,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
 });

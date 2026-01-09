@@ -1,46 +1,75 @@
+// 1. React y Hooks
 import React from "react";
+
+// 2. Librerías Externas (UI e Iconos)
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-// 1. Definimos los tipos permitidos para evitar errores
+// 3. Recursos Locales (Arquitectura Limpia)
+import { COLORS, SPACING } from "../constants/theme";
+
 export type EstadoMesa = "disponible" | "ocupada" | "esperando" | "agrupada";
 
-// 2. Configuración centralizada de estilos e iconos
-const CONFIG: Record<EstadoMesa | "default", { bg: string; text: string }> = {
+const CONFIG: Record<
+  EstadoMesa | "default",
+  {
+    bg: string;
+    text: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+  }
+> = {
   disponible: {
-    bg: "#E8F5E9", // Verde muy suave
-    text: "#2E7D32", // Verde bosque fuerte
+    bg: "#ECFDF5",
+    text: "#059669",
+    icon: "checkmark-circle",
+    label: "Libre",
   },
   ocupada: {
-    bg: "#FFEBEE", // Rojo/Rosado muy suave
-    text: "#C62828", // Rojo fuerte
+    bg: "#FEF2F2",
+    text: "#DC2626",
+    icon: "restaurant",
+    label: "Ocupada",
   },
   esperando: {
-    bg: "#FFF8E1", // Ambar suave
-    text: "#F57F17", // Naranja/Ambar oscuro
+    bg: `${COLORS.primary}15`,
+    text: COLORS.primary,
+    icon: "time",
+    label: "Atención",
   },
   agrupada: {
-    bg: "#F3E5F5", // Lila suave
-    text: "#7B1FA2", // Morado fuerte
+    bg: "#F5F3FF",
+    text: "#7C3AED",
+    icon: "layers",
+    label: "Unida",
   },
   default: {
-    bg: "#F5F5F5",
-    text: "#616161",
+    bg: COLORS.surface,
+    text: COLORS.text.muted,
+    icon: "help-circle",
+    label: "Estado",
   },
 };
 
 interface EstadoBadgeProps {
-  estado: string; // Recibimos string, pero validamos internamente
+  estado: string;
 }
 
 export default function EstadoBadge({ estado }: EstadoBadgeProps) {
-  // Normalizamos el estado a minúsculas y buscamos en la config
   const key = estado.toLowerCase() as EstadoMesa;
   const theme = CONFIG[key] || CONFIG.default;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <Text style={[styles.text, { color: theme.text }]}>{estado}</Text>
+      <Ionicons
+        name={theme.icon}
+        size={14}
+        color={theme.text}
+        style={styles.icon}
+      />
+      <Text style={[styles.text, { color: theme.text }]}>
+        {theme.label.toUpperCase()}
+      </Text>
     </View>
   );
 }
@@ -49,18 +78,20 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start", // El badge se ajusta al contenido
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20, // Bordes completamente redondos (Pill shape)
+    alignSelf: "flex-start",
+    paddingHorizontal: SPACING.s + 2,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   icon: {
-    marginRight: 4,
+    marginRight: 6,
   },
   text: {
     textAlign: "center",
-    fontSize: 12,
-    fontWeight: "800", // Extra bold para legibilidad en tamaño pequeño
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8,
   },
 });

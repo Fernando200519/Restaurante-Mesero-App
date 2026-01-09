@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   Pressable,
   Platform,
-  Alert,
   Animated,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Mesa } from "../types/mesa";
+import { COLORS, SPACING } from "../constants/theme";
 
 interface Props {
   visible: boolean;
@@ -40,8 +41,8 @@ export default function TableOpeningModal({
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        damping: 20,
-        stiffness: 90,
+        damping: 25,
+        stiffness: 150,
       }).start();
     } else {
       slideAnim.setValue(SCREEN_HEIGHT);
@@ -50,21 +51,16 @@ export default function TableOpeningModal({
 
   if (!mesa) return null;
 
-  // 👇 YA NO USAMOS maxCapacidad NI isMaxReached
   const isMinReached = pax <= 1;
 
-  const handleIncrement = () => {
-    // 👇 SIMPLEMENTE SUMAMOS (puedes poner un tope lógico como 50 si quieres)
-    setPax(pax + 1);
-  };
-
-  const handleDecrement = () => {
-    if (!isMinReached) setPax(pax - 1);
-  };
-
   const handleConfirm = async () => {
+    if (!mesa) return;
     setLoading(true);
-    await onConfirm(parseInt(mesa.id), pax);
+    try {
+      await onConfirm(mesa.id, pax);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,94 +70,86 @@ export default function TableOpeningModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        {/* 5. Usamos Animated.View en lugar de Pressable normal para la tarjeta */}
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+
         <Animated.View
           style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
         >
-          {/* Pressable vacío para atrapar los clicks y que no cierren el modal */}
-          <Pressable style={{ width: "100%" }} onPress={() => {}}>
-            {/* ❌ ELIMINADA LA RAYITA GRIS (dragHandle) AQUÍ */}
+          {/* Indicador superior de arrastre (Handle visual) */}
+          <View style={styles.dragHandle} />
 
-            {/* Encabezado */}
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>{mesa.nombre}</Text>
-                {/* 👇 QUITAMOS "Capacidad: X" DEL SUBTÍTULO */}
-                <Text style={styles.subtitle}>
-                  Zona: {mesa.zona || "General"}
+          <View style={styles.header}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="restaurant" size={24} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: SPACING.m }}>
+              <Text style={styles.title}>Apertura de {mesa.nombre}</Text>
+              <Text style={styles.subtitle}>{mesa.zona || "General"}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={20} color={COLORS.text.muted} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.content}>
+            <Text style={styles.label}>Número de comensales</Text>
+
+            <View style={styles.counterRow}>
+              <TouchableOpacity
+                onPress={() => !isMinReached && setPax(pax - 1)}
+                style={[styles.counterBtn, isMinReached && styles.btnDisabled]}
+                disabled={isMinReached}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="remove"
+                  size={28}
+                  color={isMinReached ? COLORS.text.muted : COLORS.text.primary}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.paxDisplay}>
+                <Text style={styles.paxNumber}>{pax}</Text>
+                <Text style={styles.paxUnit}>
+                  {pax === 1 ? "persona" : "personas"}
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#666" />
+
+              <TouchableOpacity
+                onPress={() => setPax(pax + 1)}
+                style={styles.counterBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={28} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
+          </View>
 
-            <View style={styles.divider} />
-
-            {/* Control de Comensales */}
-            <View style={styles.paxContainer}>
-              <Text style={styles.label}>¿Cuántas personas?</Text>
-
-              <View style={styles.counterRow}>
-                <TouchableOpacity
-                  onPress={handleDecrement}
-                  style={[
-                    styles.counterBtn,
-                    isMinReached && styles.counterBtnDisabled,
-                  ]}
-                  disabled={isMinReached}
-                >
-                  <Ionicons
-                    name="remove"
-                    size={32}
-                    color={isMinReached ? "#CCC" : "#555"}
-                  />
-                </TouchableOpacity>
-
-                <View style={styles.numberContainer}>
-                  {/* 👇 QUITAMOS EL ESTILO ROJO DE LÍMITE */}
-                  <Text style={styles.paxNumber}>{pax}</Text>
-                  <Text style={styles.paxLabel}>personas</Text>
-                </View>
-
-                {/* Botón Más (Sin disabled) */}
-                <TouchableOpacity
-                  onPress={handleIncrement}
-                  style={styles.counterBtn} // Quitamos estilo disabled
-                  // disabled={isMaxReached} // ❌ BORRADO
-                >
-                  <Ionicons name="add" size={32} color="#555" />
-                </TouchableOpacity>
-              </View>
-
-              {/* ❌ BORRAMOS EL MENSAJE DE ADVERTENCIA ROJO AQUÍ */}
-            </View>
-
-            {/* Botón de Acción */}
-            <TouchableOpacity
-              style={styles.confirmBtn}
-              onPress={handleConfirm}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <Text style={styles.confirmBtnText}>Abriendo mesa...</Text>
-              ) : (
-                <>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={24}
-                    color="#FFF"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={styles.confirmBtnText}>Ocupar Mesa</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Pressable>
+          <TouchableOpacity
+            style={[styles.confirmBtn, loading && styles.btnLoading]}
+            onPress={handleConfirm}
+            disabled={loading}
+            activeOpacity={0.9}
+          >
+            {loading ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <>
+                <Text style={styles.confirmBtnText}>Confirmar Apertura</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={COLORS.white}
+                  style={{ marginLeft: 8 }}
+                />
+              </>
+            )}
+          </TouchableOpacity>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -169,117 +157,145 @@ export default function TableOpeningModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)", // Fondo más oscuro para mayor enfoque en el modal
+  },
   sheet: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: SPACING.l,
+    paddingTop: SPACING.s,
+    paddingBottom: Platform.OS === "ios" ? 40 : 30,
     width: "100%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowRadius: 15,
     elevation: 20,
   },
-
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 10,
+    alignSelf: "center",
+    marginBottom: SPACING.m,
+  },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
+    marginBottom: SPACING.m,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: `${COLORS.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1A1A1A",
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.text.primary,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
-    color: "#757575",
-    marginTop: 4,
+    color: COLORS.text.secondary,
+    fontWeight: "500",
   },
   closeButton: {
-    padding: 8,
-    backgroundColor: "#F5F5F5",
-    borderRadius: 50,
+    width: 36,
+    height: 36,
+    backgroundColor: COLORS.surface,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
   },
   divider: {
     height: 1,
     backgroundColor: "#F0F0F0",
-    marginVertical: 20,
+    marginVertical: SPACING.s,
   },
-  paxContainer: {
+  content: {
     alignItems: "center",
-    marginBottom: 30,
+    paddingVertical: SPACING.l,
   },
   label: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 20,
+    fontSize: 15,
+    color: COLORS.text.secondary,
+    fontWeight: "600",
+    marginBottom: SPACING.xl,
   },
   counterRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.m,
   },
   counterBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#F0F0F0",
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderWidth: 1.5,
+    borderColor: "#F0F0F0",
+    // Sombra suave para los botones de control
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  counterBtnDisabled: {
+  btnDisabled: {
+    backgroundColor: COLORS.surface,
+    borderColor: "transparent",
     opacity: 0.5,
-    backgroundColor: "#FAFAFA",
   },
-  numberContainer: {
+  paxDisplay: {
     alignItems: "center",
   },
   paxNumber: {
-    fontSize: 48,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    lineHeight: 56,
+    fontSize: 64,
+    fontWeight: "900",
+    color: COLORS.text.primary,
+    includeFontPadding: false,
   },
-  paxNumberLimit: {
-    color: "#FA9623",
-  },
-  paxLabel: {
+  paxUnit: {
     fontSize: 14,
-    color: "#999",
-  },
-  limitWarning: {
-    color: "#FF3B30",
-    fontSize: 12,
-    marginTop: 10,
-    fontWeight: "600",
+    color: COLORS.text.muted,
+    textTransform: "uppercase",
+    fontWeight: "700",
+    marginTop: -5,
   },
   confirmBtn: {
-    backgroundColor: "#FA9623",
-    paddingVertical: 16,
-    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    height: 60,
+    borderRadius: 18,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#FA9623",
-    shadowOffset: { width: 0, height: 4 },
+    marginTop: SPACING.m,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 6,
   },
+  btnLoading: {
+    opacity: 0.8,
+  },
   confirmBtnText: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: "700",
   },
 });

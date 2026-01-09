@@ -5,8 +5,10 @@ import {
   View,
   TextInputProps,
   TouchableOpacity,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { COLORS, SPACING } from "../constants/theme";
 
 interface InputProps extends TextInputProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -19,31 +21,43 @@ export default function Input({ icon, secureTextEntry, ...props }: InputProps) {
   const showToggle = secureTextEntry !== undefined;
 
   return (
-    <View style={[styles.container, isFocused && styles.containerFocused]}>
+    <View
+      style={[
+        styles.container,
+        isFocused && {
+          borderColor: COLORS.primary,
+          backgroundColor: COLORS.white,
+          borderWidth: 2,
+        },
+      ]}
+    >
       <Ionicons
         name={icon}
-        size={20}
-        color={isFocused ? "#FA9623" : "#9E9E9E"}
+        size={22}
+        color={isFocused ? COLORS.primary : COLORS.text.muted}
         style={styles.icon}
       />
 
       <TextInput
         style={styles.input}
-        placeholderTextColor="#A1A1A1"
+        placeholderTextColor={COLORS.text.muted}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        secureTextEntry={!isPasswordVisible}
+        secureTextEntry={secureTextEntry && !isPasswordVisible}
+        selectionColor={COLORS.primary}
         {...props}
       />
 
       {showToggle && (
         <TouchableOpacity
           onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+          activeOpacity={0.6}
+          style={styles.toggle}
         >
           <Ionicons
             name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
             size={20}
-            color="#9E9E9E"
+            color={COLORS.text.muted}
           />
         </TouchableOpacity>
       )}
@@ -56,21 +70,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "#F0F0F0",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 56,
-    marginBottom: 16,
-    backgroundColor: "#F9F9F9",
+    borderColor: "#F1F1F1",
+    borderRadius: 18,
+    paddingHorizontal: SPACING.m,
+    height: 58,
+    marginBottom: SPACING.m,
+    backgroundColor: COLORS.surface,
   },
-  containerFocused: {
-    borderColor: "#FA9623",
-    backgroundColor: "#FFF",
+  icon: {
+    marginRight: SPACING.s,
   },
-  icon: { marginRight: 12 },
   input: {
     flex: 1,
     fontSize: 16,
-    color: "#333",
+    color: COLORS.text.primary,
+    fontWeight: "500",
+  },
+  toggle: {
+    padding: SPACING.xs,
   },
 });

@@ -8,6 +8,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -16,10 +17,12 @@ import { StatusBar } from "expo-status-bar";
 import Input from "../components/Input";
 import Button from "../components/Button";
 import { useAuth } from "../context/AuthContext";
+import { COLORS, SPACING } from "../constants/theme";
 
 interface LoginScreenProps {
   navigation: NativeStackNavigationProp<any>;
 }
+
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +33,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
   const handleLogin = async () => {
     if (!usuario || !password) {
-      setError("Por favor ingresa usuario y contraseña");
+      setError("Por favor ingresa credenciales válidas");
       return;
     }
 
@@ -40,17 +43,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       const result = await signIn(usuario, password);
 
       if (result.success) {
-        if (result.requirePasswordChange) {
-          navigation.replace("ChangePassword");
-        } else {
-          navigation.replace("Mesas");
-        }
+        navigation.replace(
+          result.requirePasswordChange ? "ChangePassword" : "Mesas"
+        );
       } else {
-        setError("Usuario o contraseña incorrectos");
+        setError("Las credenciales no coinciden con nuestros registros");
       }
     } catch (err) {
-      console.log(err);
-      setError("Ocurrió un error inesperado");
+      setError("Error de conexión con el servidor");
     } finally {
       setLoading(false);
     }
@@ -59,20 +59,28 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.container}
         >
           <View style={styles.innerContainer}>
+            {/* ✅ Cabecera actualizada con Logo */}
             <View style={styles.header}>
+              <View style={styles.logoBox}>
+                <Image
+                  source={require("../../assets/mesa-blanca.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
               <Text style={styles.title}>Mesa Libre</Text>
             </View>
 
+            {/* Formulario limpio y enfocado */}
             <View style={styles.form}>
               <Input
-                placeholder="Usuario"
+                placeholder="Correo electrónico o usuario"
                 icon="person-outline"
                 value={usuario}
                 onChangeText={(text) => {
@@ -93,16 +101,24 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 }}
               />
 
-              {error && <Text style={styles.errorText}>{error}</Text>}
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
 
-              <Button
-                title="Iniciar Sesión"
-                onPress={handleLogin}
-                isLoading={loading}
-              />
+              <View style={styles.buttonSpacer}>
+                <Button
+                  title="Iniciar Sesión"
+                  onPress={handleLogin}
+                  isLoading={loading}
+                />
+              </View>
+
               <TouchableOpacity
                 onPress={() => navigation.navigate("ForgotPassword")}
                 style={styles.forgotButton}
+                activeOpacity={0.7}
               >
                 <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
@@ -117,68 +133,81 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: COLORS.background,
   },
   container: {
     flex: 1,
   },
   innerContainer: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.xl,
     justifyContent: "center",
   },
   header: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: SPACING.xl,
   },
   logoBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: "#FA9623",
-    borderRadius: 24,
+    width: 100,
+    height: 100,
+    backgroundColor: COLORS.primary,
+    borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#FA9623",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    marginBottom: SPACING.m,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   logoText: {
-    color: "white",
-    fontSize: 40,
+    color: COLORS.white,
+    fontSize: 36,
     fontWeight: "800",
   },
+  logoImage: {
+    width: "70%", // ✅ Ajusta el tamaño del dibujo dentro del cuadro
+    height: "70%",
+    tintColor: "#FFFFFF", // ✅ Opcional: fuerza a que el dibujo sea blanco puro si es un icono
+  },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-    marginBottom: 8,
+    fontSize: 32,
+    fontWeight: "800", // ✅ Más peso visual
+    color: COLORS.text.primary,
+    letterSpacing: -1,
   },
   subtitle: {
     fontSize: 16,
-    color: "#9E9E9E",
-    fontWeight: "500",
+    color: COLORS.text.secondary,
+    marginTop: SPACING.xs,
   },
   form: {
     width: "100%",
   },
+  errorContainer: {
+    backgroundColor: `${COLORS.error}10`,
+    padding: SPACING.s,
+    borderRadius: 8,
+    marginVertical: SPACING.s,
+  },
   errorText: {
-    color: "#FF3B30",
-    fontSize: 14,
-    marginTop: 5,
-    marginBottom: 5,
+    color: COLORS.error,
+    fontSize: 13,
     textAlign: "center",
     fontWeight: "600",
   },
+  buttonSpacer: {
+    marginTop: SPACING.m,
+  },
   forgotButton: {
     alignSelf: "center",
-    marginTop: 40,
+    marginTop: SPACING.xl,
+    padding: SPACING.s,
   },
   forgotText: {
-    color: "#FA9623",
+    color: COLORS.primary,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

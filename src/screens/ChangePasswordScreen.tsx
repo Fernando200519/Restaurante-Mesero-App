@@ -9,6 +9,7 @@ import {
   Keyboard,
   TouchableOpacity,
   Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -18,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Input from "../components/Input";
 import Button from "../components/Button";
 import { useAuth } from "../context/AuthContext";
+import { COLORS, SPACING } from "../constants/theme";
 
 interface ChangePasswordScreenProps {
   navigation: NativeStackNavigationProp<any>;
@@ -29,9 +31,6 @@ export default function ChangePasswordScreen({
   route,
 }: ChangePasswordScreenProps) {
   const { changePassword } = useAuth();
-
-  // Si canGoBack es true, significa que es un cambio VOLUNTARIO (desde el menú)
-  // Si es false, es el cambio OBLIGATORIO (primer login)
   const canGoBack = route.params?.canGoBack || false;
 
   const [currentPass, setCurrentPass] = useState("");
@@ -39,24 +38,16 @@ export default function ChangePasswordScreen({
   const [confirmPass, setConfirmPass] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 👇 DEFINIMOS LOS TEXTOS SEGÚN EL CONTEXTO
-  const screenTitle = canGoBack
-    ? "Cambiar Contraseña"
-    : "Configura tu contraseña";
+  // Textos dinámicos basados en el flujo de usuario
+  const screenTitle = canGoBack ? "Seguridad" : "Nueva Contraseña";
   const screenSubtitle = canGoBack
-    ? "Ingresa tu contraseña actual y define una nueva para actualizar tu seguridad."
-    : "Por seguridad, actualiza tu contraseña para continuar.";
+    ? "Actualiza tu clave de acceso periódicamente para proteger tu cuenta."
+    : "Tu cuenta está inactiva. Por seguridad, crea una contraseña nueva.";
 
-  const isStrong = (pass: string) => {
-    return pass.length >= 8 && /\d/.test(pass);
-  };
-
+  const isStrong = (pass: string) => pass.length >= 8 && /\d/.test(pass);
   const passwordsMatch = newPass === confirmPass;
-  const isValid =
-    currentPass.length > 0 &&
-    isStrong(newPass) &&
-    passwordsMatch &&
-    newPass.length > 0;
+
+  const isValid = currentPass.length > 0 && isStrong(newPass) && passwordsMatch;
 
   const handleChangePassword = async () => {
     if (!isValid) return;
@@ -67,22 +58,20 @@ export default function ChangePasswordScreen({
 
       Alert.alert("Éxito", "Contraseña actualizada correctamente", [
         {
-          text: "OK",
+          text: "Entendido",
           onPress: () => {
-            // 👇 LÓGICA DE NAVEGACIÓN MEJORADA
             if (canGoBack) {
-              navigation.goBack(); // Si vino del menú, regresa al menú
+              navigation.goBack();
             } else {
-              navigation.replace("Mesas"); // Si es login forzoso, entra al sistema
+              navigation.replace("Mesas");
             }
           },
         },
       ]);
     } catch (error: any) {
-      console.log(error);
       Alert.alert(
-        "Error",
-        error.message || "La contraseña actual es incorrecta o hubo un error."
+        "Error de Seguridad",
+        error.message || "La contraseña actual no es válida."
       );
     } finally {
       setLoading(false);
@@ -98,19 +87,35 @@ export default function ChangePasswordScreen({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.container}
         >
-          <View style={styles.innerContainer}>
-            {/* BOTÓN DE ATRÁS CONDICIONAL */}
-            {canGoBack && (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
-              >
-                <Ionicons name="arrow-back" size={28} color="#333" />
-              </TouchableOpacity>
-            )}
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Cabecera con Botón de Regreso Profesional */}
+            <View style={styles.topBar}>
+              {canGoBack && (
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => navigation.goBack()}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={28}
+                    color={COLORS.text.primary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
 
             <View style={styles.header}>
-              {/* 👇 USAMOS LAS VARIABLES DINÁMICAS */}
+              <View style={styles.iconContainer}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={40}
+                  color={COLORS.primary}
+                />
+              </View>
               <Text style={styles.title}>{screenTitle}</Text>
               <Text style={styles.subtitle}>{screenSubtitle}</Text>
             </View>
@@ -122,8 +127,6 @@ export default function ChangePasswordScreen({
                 secureTextEntry
                 value={currentPass}
                 onChangeText={setCurrentPass}
-                autoCapitalize="none"
-                autoCorrect={false}
               />
 
               <Input
@@ -132,133 +135,146 @@ export default function ChangePasswordScreen({
                 secureTextEntry
                 value={newPass}
                 onChangeText={setNewPass}
-                autoCapitalize="none"
-                autoCorrect={false}
               />
 
               <Input
                 placeholder="Confirmar nueva contraseña"
-                icon="lock-closed-outline"
+                icon="checkmark-circle-outline"
                 secureTextEntry
                 value={confirmPass}
                 onChangeText={setConfirmPass}
-                autoCapitalize="none"
-                autoCorrect={false}
               />
 
-              <View style={styles.validationContainer}>
-                {newPass.length > 0 && !isStrong(newPass) && (
-                  <Text style={styles.warningText}>
-                    Mínimo 8 caracteres y un número.
-                  </Text>
-                )}
-
-                {confirmPass.length > 0 && !passwordsMatch && (
-                  <Text style={styles.warningText}>
-                    Las contraseñas no coinciden.
-                  </Text>
-                )}
+              {/* Indicadores de Validación Dinámicos */}
+              <View style={styles.validationBox}>
+                <ValidationItem
+                  text="Mínimo 8 caracteres y un número"
+                  isValid={isStrong(newPass)}
+                  show={newPass.length > 0}
+                />
+                <ValidationItem
+                  text="Las contraseñas coinciden"
+                  isValid={passwordsMatch}
+                  show={confirmPass.length > 0}
+                />
               </View>
 
               <Button
-                title={canGoBack ? "Actualizar" : "Comenzar"} // También cambiamos el botón un poco
+                title={canGoBack ? "Actualizar Seguridad" : "Activar Cuenta"}
                 onPress={handleChangePassword}
                 isLoading={loading}
                 style={!isValid ? styles.btnDisabled : undefined}
+                variant={!isValid ? "outline" : "primary"}
               />
-
-              {!isValid && <View style={styles.overlayDisable} />}
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
 
+// Componente auxiliar para una arquitectura limpia
+const ValidationItem = ({
+  text,
+  isValid,
+  show,
+}: {
+  text: string;
+  isValid: boolean;
+  show: boolean;
+}) => {
+  if (!show) return null;
+  return (
+    <View style={styles.validationItem}>
+      <Ionicons
+        name={isValid ? "checkmark-circle" : "close-circle"}
+        size={16}
+        color={isValid ? "#22C55E" : COLORS.error}
+      />
+      <Text
+        style={[
+          styles.validationText,
+          { color: isValid ? "#15803D" : COLORS.error },
+        ]}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: COLORS.background,
   },
   container: {
     flex: 1,
   },
-  innerContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xl,
+  },
+  topBar: {
+    height: 60,
     justifyContent: "center",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     alignItems: "center",
-    marginBottom: 30,
+    marginTop: SPACING.m,
+    marginBottom: SPACING.xl,
   },
-  logoBox: {
+  iconContainer: {
     width: 80,
     height: 80,
-    backgroundColor: "#FA9623",
     borderRadius: 24,
+    backgroundColor: `${COLORS.primary}15`,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#FA9623",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  logoText: {
-    color: "white",
-    fontSize: 40,
-    fontWeight: "800",
+    marginBottom: SPACING.m,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#1A1A1A",
+    color: COLORS.text.primary,
     textAlign: "center",
-    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    color: "#757575",
+    fontSize: 16,
+    color: COLORS.text.secondary,
     textAlign: "center",
-    paddingHorizontal: 10,
-    lineHeight: 22,
+    marginTop: SPACING.s,
+    lineHeight: 24,
   },
   form: {
     width: "100%",
   },
-  validationContainer: {
-    marginBottom: 10,
-    minHeight: 20,
+  validationBox: {
+    marginBottom: SPACING.m,
+    gap: SPACING.xs,
   },
-  warningText: {
-    color: "#FF3B30",
+  validationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  validationText: {
     fontSize: 13,
-    marginBottom: 5,
-    fontWeight: "500",
-    marginLeft: 4,
+    fontWeight: "600",
   },
   btnDisabled: {
-    backgroundColor: "#E0E0E0",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  overlayDisable: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 56,
-    backgroundColor: "transparent",
-  },
-  // Estilo para el botón de atrás
-  backButton: {
-    position: "absolute",
-    top: 20, // Ajusta según tu gusto
-    left: 0,
-    zIndex: 10,
-    padding: 10,
+    opacity: 0.5,
   },
 });

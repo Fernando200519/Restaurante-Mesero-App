@@ -1,379 +1,218 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
+
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   FlatList,
-  Image,
+  Text,
   TouchableOpacity,
-  Alert,
-  ScrollView,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RouteProp } from "@react-navigation/native";
+import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 
-import { useAuth } from "../context/AuthContext";
-import { productosApi } from "../api/productosApi";
-import { Categoria, Producto } from "../types/producto";
+import { useMenuProductos } from "../hooks/useMenuProductos";
+import MenuHeader from "../components/MenuHeader";
 import ProductDetailsModal from "../components/ProductDetailsModal";
+import { COLORS, SPACING } from "../constants/theme";
 
-interface CartItem {
-  producto: Producto;
-  cantidad: number;
-  opciones?: any[];
-}
+const CategoryCard = ({ item, onPress }: any) => (
+  <TouchableOpacity
+    style={styles.catCard}
+    onPress={() => onPress(item)}
+    activeOpacity={0.8}
+  >
+    <View style={styles.catIconContainer}>
+      <Ionicons
+        name={item.tipo === "Bebidas" ? "wine" : "restaurant"}
+        size={24}
+        color={COLORS.primary}
+      />
+    </View>
+    <Text style={styles.catName} numberOfLines={2}>
+      {item.nombre}
+    </Text>
+    <Ionicons name="chevron-forward" size={16} color={COLORS.text.muted} />
+  </TouchableOpacity>
+);
 
-interface MenuProductosParams {
-  comensalId: number;
-  comensalNombre: string;
-  mesaId: number;
-  orderId: number;
-}
+const ProductCard = ({ item, onAdd }: any) => {
+  const imageUrl = item.imagen ? `${item.imagen}#.jpg` : null;
 
-interface Props {
-  navigation: NativeStackNavigationProp<any>;
-  // Aquí le decimos a RouteProp qué estructura esperar
-  route: RouteProp<{ MenuProductos: MenuProductosParams }, "MenuProductos">;
-}
+  return (
+    <TouchableOpacity
+      style={styles.prodCard}
+      onPress={() => onAdd(item)}
+      activeOpacity={0.9}
+    >
+      <View style={styles.prodImageContainer}>
+        {item.imagen ? (
+          <Image
+            style={styles.prodImage}
+            source={imageUrl}
+            contentFit="cover"
+            transition={400}
+            cachePolicy="disk"
+          />
+        ) : (
+          <View style={styles.placeholderOverlay}>
+            <Ionicons
+              name="fast-food-outline"
+              size={30}
+              color={COLORS.surface}
+            />
+          </View>
+        )}
+      </View>
 
-export default function MenuProductosScreen({ navigation, route }: Props) {
-  // TypeScript ahora reconocerá estas propiedades gracias a la interface anterior
-  const { comensalId, comensalNombre, mesaId, orderId } = route.params;
-  const { token, signOut } = useAuth();
-
-  // 2. ESTADOS DE DATOS
-  const [loading, setLoading] = useState(true);
-  const [todasLasCategorias, setTodasLasCategorias] = useState<Categoria[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [search, setSearch] = useState("");
-
-  // 3. ESTADO DE NAVEGACIÓN (BREADCRUMBS)
-  const [navigationPath, setNavigationPath] = useState<Categoria[]>([]);
-
-  // 4. ESTADOS DE CARRITO Y MODALES
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
-  const [isModalVisible, setModalVisible] = useState(false);
-  const [notification, setNotification] = useState({
-    visible: false,
-    message: "",
-  });
-
-  // --- CARGA DE DATOS ---
-  useEffect(() => {
-    const loadData = async () => {
-      if (!token) return;
-      setLoading(true);
-      try {
-        // Dentro de loadData() en MenuProductosScreen.tsx
-        const [catsData, prodsData] = await Promise.all([
-          productosApi.getCategorias(token),
-          productosApi.getProductos(token),
-        ]);
-
-        // Forzamos el tipo para que TS sepa que cumplen con la interface nueva
-        setTodasLasCategorias(catsData as Categoria[]);
-        setProductos(prodsData as Producto[]);
-      } catch (error: any) {
-        console.error("Error cargando menú:", error);
-        if (error.message?.includes("Sesión expirada")) {
-          signOut();
-          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [token]);
-
-  // --- LÓGICA DE FILTRADO (EL CORAZÓN DEL DISEÑO) ---
-  const currentCategory = navigationPath[navigationPath.length - 1];
-
-  const itemsAMostrar = useMemo<(Producto | Categoria)[]>(() => {
-    // 👈 Agregamos el tipo genérico aquí
-    if (search.length > 0) {
-      return productos.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(search.toLowerCase()) &&
-          (p.estado === "Activo" || p.estado === "Activa")
-      );
-    }
-
-    if (!currentCategory) {
-      return todasLasCategorias.filter(
-        (c) => !c.categoriaPadreId || c.categoriaPadreId === 0
-      );
-    }
-
-    const subcats = todasLasCategorias.filter(
-      (c) => c.categoriaPadreId === currentCategory.id
-    );
-    if (subcats.length > 0) return subcats;
-
-    return productos.filter((p) => p.categoryId === currentCategory.id);
-  }, [search, currentCategory, todasLasCategorias, productos]);
-
-  // --- MANEJADORES DE EVENTOS ---
-  const handleItemPress = (item: any) => {
-    // Si el item no tiene 'precio', es una categoría
-    if (item.precio === undefined) {
-      setNavigationPath([...navigationPath, item]);
-    } else {
-      handleAddPress(item);
-    }
-  };
-
-  const handleBreadcrumbPress = (index: number) => {
-    if (index === -1) setNavigationPath([]);
-    else setNavigationPath(navigationPath.slice(0, index + 1));
-  };
-
-  const handleAddPress = (producto: Producto) => {
-    // Verificamos si tiene complementos o ingredientes en el JSON real
-    const tieneOpciones =
-      (producto.complementos?.length ?? 0) > 0 ||
-      (producto.ingredientesOpcionales?.length ?? 0) > 0;
-
-    if (tieneOpciones) {
-      setSelectedProduct(producto);
-      setModalVisible(true);
-    } else {
-      addToCartDirect(producto);
-    }
-  };
-
-  const addToCartDirect = (
-    producto: Producto,
-    opciones: any[] = [],
-    precioFinal?: number
-  ) => {
-    setNotification({ visible: true, message: `¡${producto.nombre} añadido!` });
-    setTimeout(() => setNotification({ visible: false, message: "" }), 1500);
-
-    setCart((prev) => {
-      const nuevoPrecio = precioFinal || producto.precio;
-      // Para simplificar, si tiene opciones siempre lo agregamos como item nuevo
-      if (opciones.length > 0) {
-        return [
-          ...prev,
-          {
-            producto: { ...producto, precio: nuevoPrecio },
-            cantidad: 1,
-            opciones,
-          },
-        ];
-      }
-      const existe = prev.find(
-        (i) => i.producto.id === producto.id && !i.opciones
-      );
-      if (existe) {
-        return prev.map((i) =>
-          i === existe ? { ...i, cantidad: i.cantidad + 1 } : i
-        );
-      }
-      return [...prev, { producto, cantidad: 1 }];
-    });
-  };
-
-  const handleConfirmCustomization = (
-    prod: any,
-    opts: any[],
-    price: number
-  ) => {
-    addToCartDirect(prod, opts, price);
-    setModalVisible(false);
-  };
-
-  const handleVerOrden = () => {
-    navigation.navigate("ResumenPedido", {
-      cart,
-      comensalNombre,
-      comensalId,
-      mesaId,
-      orderId,
-      updateCart: (nuevoCarrito: CartItem[]) => setCart(nuevoCarrito),
-    });
-  };
-
-  const cartTotal = cart.reduce(
-    (acc, i) => acc + i.producto.precio * i.cantidad,
-    0
+      <View style={styles.prodInfo}>
+        <Text style={styles.prodName} numberOfLines={2}>
+          {item.nombre}
+        </Text>
+        <Text style={styles.prodPrice}>${item.precio.toFixed(2)}</Text>
+      </View>
+      <View style={styles.addIcon}>
+        <Ionicons name="add" size={20} color={COLORS.white} />
+      </View>
+    </TouchableOpacity>
   );
-  const cartCount = cart.reduce((acc, i) => acc + i.cantidad, 0);
+};
 
-  // --- RENDERIZADO ---
+export default function MenuProductosScreen({ navigation, route }: any) {
+  const { headerProps, gridProps, orderContext, modalProps, notification } =
+    useMenuProductos(navigation, route);
+
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (gridProps.loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      shimmerAnim.setValue(0);
+    }
+  }, [gridProps.loading]);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar style="dark" />
+      <MenuHeader {...headerProps} />
 
-      {/* SECCIÓN SUPERIOR: Header y Buscador */}
-      <View style={styles.topSection}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerLabel}>Mesa {mesaId}</Text>
-            <Text style={styles.headerName}>{comensalNombre}</Text>
+      <FlatList<any>
+        data={gridProps.items}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={
+          gridProps.items.length > 0 && gridProps.isCategory(gridProps.items[0])
+            ? 1
+            : 2
+        }
+        key={
+          gridProps.items.length > 0 && gridProps.isCategory(gridProps.items[0])
+            ? "v"
+            : "h"
+        }
+        renderItem={({ item }) =>
+          gridProps.isCategory(item) ? (
+            <CategoryCard item={item} onPress={gridProps.onPressItem} />
+          ) : (
+            <ProductCard item={item} onAdd={gridProps.onPressItem} />
+          )
+        }
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={50} color={COLORS.surface} />
+            <Text style={styles.emptyText}>No encontramos lo que buscas</Text>
           </View>
-        </View>
-
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#9E9E9E" />
-            <TextInput
-              placeholder="Buscar por nombre..."
-              style={styles.searchInput}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={18} color="#9E9E9E" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* BREADCRUMBS */}
-      {search.length === 0 && (
-        <View style={styles.breadcrumbWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity onPress={() => handleBreadcrumbPress(-1)}>
-              <Text style={styles.breadcrumbText}>Inicio</Text>
-            </TouchableOpacity>
-            {navigationPath.map((cat, index) => (
-              <View key={cat.id} style={styles.breadcrumbItem}>
-                <Ionicons name="chevron-forward" size={14} color="#9E9E9E" />
-                <TouchableOpacity onPress={() => handleBreadcrumbPress(index)}>
-                  <Text
-                    style={[
-                      styles.breadcrumbText,
-                      index === navigationPath.length - 1 &&
-                        styles.breadcrumbActive,
-                    ]}
-                  >
-                    {cat.nombre}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* GRID DE CONTENIDO */}
-      {loading ? (
-        <ActivityIndicator
-          style={{ marginTop: 50 }}
-          color="#FA9623"
-          size="large"
-        />
-      ) : (
-        <FlatList<Producto | Categoria> // 👈 Especificamos el tipo aquí también
-          data={itemsAMostrar}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={styles.gridContent}
-          columnWrapperStyle={{ justifyContent: "space-between" }}
-          renderItem={({ item }) => {
-            const isProduct = "precio" in item;
-
-            if (!isProduct) {
-              const categoria = item as Categoria;
-              return (
-                <TouchableOpacity
-                  style={[styles.card, styles.categoryCard]}
-                  onPress={() => handleItemPress(categoria)}
-                >
-                  <View style={styles.folderIconContainer}>
-                    <Ionicons name="folder" size={50} color="#FA9623" />
-                    <Text style={styles.categoryName} numberOfLines={1}>
-                      {categoria.nombre}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            } else {
-              // Aquí TypeScript ya sabe que 'item' es un Producto
-              const producto = item as Producto;
-              return (
-                <TouchableOpacity
-                  style={styles.card}
-                  onPress={() => handleItemPress(producto)}
-                >
-                  <Image
-                    source={{
-                      uri: producto.imagen || "https://placehold.co/400",
-                    }}
-                    style={styles.cardImage}
-                  />
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                      {producto.nombre}
-                    </Text>
-                    <Text style={styles.cardPrice}>
-                      ${producto.precio.toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.addButtonMini}>
-                    <Ionicons name="add" size={20} color="#FFF" />
-                  </View>
-                </TouchableOpacity>
-              );
-            }
-          }}
-          ListEmptyComponent={
-            <Text
-              style={{ textAlign: "center", marginTop: 40, color: "#9E9E9E" }}
-            >
-              No se encontraron resultados
-            </Text>
-          }
-        />
-      )}
-
-      {/* BARRA DE CARRITO FLOTANTE */}
-      {cartCount > 0 && (
-        <View style={styles.floatingCartContainer}>
-          <TouchableOpacity
-            style={styles.floatingCart}
-            onPress={handleVerOrden}
-          >
-            <View style={styles.cartInfoWrapper}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{cartCount}</Text>
-              </View>
-              <Text style={styles.totalText}>${cartTotal.toFixed(2)}</Text>
-            </View>
-            <View style={styles.btnAction}>
-              <Text style={styles.btnText}>Ver Orden</Text>
-              <Ionicons name="chevron-forward" size={18} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* MODAL Y TOAST */}
-      <ProductDetailsModal
-        visible={isModalVisible}
-        producto={selectedProduct}
-        onClose={() => setModalVisible(false)}
-        onAddToCart={handleConfirmCustomization}
+        }
       />
+
+      {/* BARRA DE CARRITO: Resumen flotante inferior */}
+      {orderContext.cart.length > 0 && (
+        <View style={styles.cartBar}>
+          <View>
+            <Text style={styles.cartCount}>
+              {orderContext.cart.length} productos
+            </Text>
+            <Text style={styles.cartTotal}>
+              Total: ${orderContext.total.toFixed(2)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.confirmBtn}
+            onPress={() =>
+              navigation.navigate("ResumenPedido", {
+                cart: orderContext.cart,
+                comensalNombre: orderContext.comensalNombre,
+                orderId: orderContext.orderId,
+                mesaId: headerProps.mesaId,
+                updateCart: orderContext.setCart,
+              })
+            }
+          >
+            <Text style={styles.confirmBtnText}>Revisar Orden</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Notificación de Producto Añadido (Toast) */}
       {notification.visible && (
         <View style={styles.toast}>
           <Text style={styles.toastText}>{notification.message}</Text>
+        </View>
+      )}
+
+      <ProductDetailsModal {...modalProps} />
+
+      {/* 🚀 OVERLAY DE CARGA MEJORADO */}
+      {gridProps.loading && (
+        <View style={styles.loadingOverlay}>
+          <BlurView
+            intensity={30}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Obteniendo opciones...</Text>
+
+            {/* BARRA DE CARGA ANIMADA (SHIMMER) */}
+            <View style={styles.progressBarContainer}>
+              <Animated.View
+                style={[
+                  styles.progressBar,
+                  {
+                    opacity: shimmerAnim,
+                    transform: [
+                      {
+                        translateX: shimmerAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-100, 100],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -381,121 +220,165 @@ export default function MenuProductosScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
-  topSection: {
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  header: { flexDirection: "row", alignItems: "center", padding: 20 },
-  backBtn: {
-    padding: 8,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-    marginRight: 15,
-  },
-  headerLabel: {
-    fontSize: 10,
-    color: "#9E9E9E",
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  headerName: { fontSize: 18, fontWeight: "bold", color: "#1A1A1A" },
-  searchContainer: { paddingHorizontal: 20, paddingBottom: 15 },
-  searchBar: {
+  container: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  listContent: { padding: SPACING.m, paddingBottom: 120 },
+  catCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 45,
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 15 },
-  breadcrumbWrapper: {
-    paddingHorizontal: 20,
-    // 👇 ELIMINA ESTA LÍNEA:
-    // py: 12,
-    backgroundColor: "#FFF",
-    paddingVertical: 12, // Esto ya hace el trabajo de 'py'
-  },
-  breadcrumbItem: { flexDirection: "row", alignItems: "center" },
-  breadcrumbText: { fontSize: 14, color: "#9E9E9E", marginHorizontal: 5 },
-  breadcrumbActive: { color: "#FA9623", fontWeight: "bold" },
-  gridContent: { padding: 20 },
-  card: {
-    width: "48%",
-    backgroundColor: "#FFF",
+    backgroundColor: COLORS.white,
+    padding: SPACING.m,
     borderRadius: 16,
-    marginBottom: 15,
+    marginBottom: SPACING.s,
     elevation: 2,
-    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
-  categoryCard: {
-    height: 130,
+  catIconContainer: {
+    width: 45,
+    height: 45,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.primary}10`,
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    alignItems: "center",
+    marginRight: SPACING.m,
   },
-  folderIconContainer: { alignItems: "center" },
-  categoryName: {
-    marginTop: 5,
-    fontSize: 13,
+  catName: {
+    flex: 1,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#4B5563",
+    color: COLORS.text.primary,
   },
-  cardImage: { width: "100%", height: 110 },
-  cardInfo: { padding: 10 },
-  cardTitle: { fontSize: 14, fontWeight: "600", color: "#333" },
-  cardPrice: {
+  prodCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    margin: 6,
+    borderRadius: 20,
+    padding: 10,
+    elevation: 3,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  prodInfo: { paddingHorizontal: 4 },
+  prodName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text.primary,
+    height: 40,
+  },
+  prodPrice: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#10B981",
-    marginTop: 2,
+    color: COLORS.primary,
+    marginTop: 4,
   },
-  addButtonMini: {
+  addIcon: {
     position: "absolute",
-    top: 5,
-    right: 5,
-    backgroundColor: "#FA9623",
-    borderRadius: 10,
-    padding: 4,
-  },
-  floatingCartContainer: {
-    position: "absolute",
-    bottom: 25,
-    width: "100%",
-    // 👇 ELIMINA ESTA LÍNEA:
-    // px: 20,
-    paddingHorizontal: 20, // Esta es la propiedad que React Native sí entiende
-  },
-  floatingCart: {
-    backgroundColor: "#1A1A1A",
-    flexDirection: "row",
-    borderRadius: 15,
-    padding: 15,
-    justifyContent: "space-between",
+    bottom: 10,
+    right: 10,
+    backgroundColor: COLORS.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
     alignItems: "center",
   },
-  cartInfoWrapper: { flexDirection: "row", alignItems: "center" },
-  badge: {
-    backgroundColor: "#FA9623",
-    paddingHorizontal: 8,
-    // 👇 CAMBIO: Reemplaza 'py' por 'paddingVertical'
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginRight: 10,
+  cartBar: {
+    position: "absolute",
+    bottom: 30,
+    left: 20,
+    right: 20,
+    backgroundColor: "#1F2937",
+    padding: SPACING.m,
+    borderRadius: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    elevation: 10,
   },
-  badgeText: { color: "#FFF", fontWeight: "bold" },
-  totalText: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
-  btnAction: { flexDirection: "row", alignItems: "center" },
-  btnText: { color: "#FFF", fontWeight: "bold", marginRight: 5 },
+  cartCount: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  cartTotal: { color: COLORS.white, fontSize: 18, fontWeight: "800" },
+  confirmBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  confirmBtnText: { color: COLORS.white, fontWeight: "700", marginRight: 5 },
+
+  emptyContainer: { alignItems: "center", marginTop: 100 },
+  emptyText: { color: COLORS.text.muted, marginTop: 10, fontSize: 15 },
   toast: {
     position: "absolute",
-    bottom: 100,
+    top: 120,
     alignSelf: "center",
     backgroundColor: "#333",
-    padding: 10,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    zIndex: 100,
   },
-  toastText: { color: "#FFF", fontWeight: "bold" },
+  toastText: { color: COLORS.white, fontWeight: "600" },
+
+  prodImageContainer: {
+    height: 100,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 15,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  prodImage: {
+    width: "100%",
+    height: "100%",
+  },
+  placeholderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  loadingCard: {
+    backgroundColor: COLORS.white,
+    padding: 30,
+    borderRadius: 24,
+    alignItems: "center",
+    width: "70%",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text.primary,
+  },
+  progressBarContainer: {
+    height: 6,
+    width: 140,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    marginTop: 15,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    width: "60%",
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
 });

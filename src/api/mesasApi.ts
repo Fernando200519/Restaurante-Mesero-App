@@ -5,30 +5,30 @@ const API_URL = "http://137.184.191.81";
 const adaptarMesa = (backendMesa: MesaBackend): Mesa => {
   let estadoUI: Mesa["estado"] = "disponible";
 
+  // Normalizamos el string del backend
   const estadoBack = backendMesa.estado?.toUpperCase() || "LIBRE";
 
-  if (estadoBack === "OCUPADA") estadoUI = "ocupada";
-  else if (estadoBack === "ESPERANDO") estadoUI = "esperando";
-  else if (estadoBack === "AGRUPADA") estadoUI = "agrupada";
+  if (estadoBack === "OCUPADA") {
+    estadoUI = "ocupada";
+  } else if (estadoBack === "ESPERANDO" || estadoBack === "PENDIENTE DE PAGO") {
+    // ✅ Ahora capturamos el nuevo estado del backend
+    estadoUI = "esperando";
+  } else if (estadoBack === "AGRUPADA") {
+    estadoUI = "agrupada";
+  }
 
   return {
-    id: backendMesa.id.toString(),
+    id: backendMesa.id,
     nombre: `Mesa ${backendMesa.id}`,
-    ocupantes: backendMesa.comensales || 0,
+    comensales: backendMesa.comensales || 0,
     estado: estadoUI,
     zona: backendMesa.zona || "General",
-    alerta: false,
-
-    mesero: backendMesa.nombreMesero
-      ? {
-          nombre: backendMesa.nombreMesero,
-          online: backendMesa.meseroDisponible || false,
-          avatarUrl: backendMesa.fotoPerfilMesero || undefined,
-        }
-      : null,
-
-    orderId: backendMesa.orderId || backendMesa.ordenId || undefined,
-    fechaInicio: backendMesa.fechaHoraInicioOcupacion,
+    ordenId: backendMesa.ordenId || backendMesa.orderId || null,
+    meseroId: backendMesa.meseroId,
+    nombreMesero: backendMesa.nombreMesero || undefined,
+    fotoPerfilMesero: backendMesa.fotoPerfilMesero || undefined,
+    meseroDisponible: backendMesa.meseroDisponible ?? false,
+    fechaHoraInicioOcupacion: backendMesa.fechaHoraInicioOcupacion || undefined,
   };
 };
 
@@ -60,40 +60,53 @@ export const mesasApi = {
       throw error;
     }
   },
+
   ocuparMesa: async (
     mesaId: number,
-    empleadoId: number,
     comensales: number,
     token: string
   ): Promise<any> => {
+    const url = `${API_URL}/orders`;
+
+    const tokenDebug =
+      typeof token === "string" ? token.substring(0, 10) : "INVALID_TOKEN";
+
+    const payload = {
+      tipoOrden: "ComerAqui",
+      mesasIds: [Number(mesaId)],
+      comensales: Number(comensales),
+      detallesOrden: null,
+      pago: null,
+    };
+
+    console.log("📡 POST ->", url);
+    console.log("🔑 Token Preview:", tokenDebug);
+
     try {
-      const response = await fetch(`${API_URL}/orders`, {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          mesasIds: [mesaId],
-          comensales: comensales,
-          tipoOrden: "ComerAqui",
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error("No se pudo ocupar la mesa: " + errorText);
+        throw new Error(errorText || `Error ${response.status}`);
       }
+
       return await response.json();
-    } catch (error) {
-      console.error("Error en ocuparMesa:", error);
+    } catch (error: any) {
+      console.error("🔴 Error en ocuparMesa:", error.message);
       throw error;
     }
   },
+
   agregarProductosOrden: async (
     orderId: number,
     items: any[],
-    empleadoId: number,
     comensalNombre: string,
     token: string
   ): Promise<void> => {
@@ -120,13 +133,15 @@ export const mesasApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error("Error enviando productos: " + errorText);
+        console.error("🔴 Error del backend:", errorText);
+        throw new Error(errorText || `Error ${response.status}`);
       }
-    } catch (error) {
-      console.error("Error en agregarProductosOrden:", error);
+    } catch (error: any) {
+      console.error("Error en agregarProductosOrden:", error.message);
       throw error;
     }
   },
+
   getDetalleOrden: async (orderId: number, token: string): Promise<any[]> => {
     try {
       const response = await fetch(`${API_URL}/orders/${orderId}`, {
@@ -181,6 +196,74 @@ export const mesasApi = {
     } catch (error) {
       console.error("Error cargando zonas:", error);
       return [];
+    }
+  },
+
+  getMesaById: async (mesaId: number, token: string): Promise<Mesa> => {
+    const response = await fetch(`${API_URL}/tables/${mesaId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Mesa no encontrada");
+    const data = await response.json();
+    return adaptarMesa(data);
+  },
+
+  actualizarEstadoProducto: async (
+    orderId: number,
+    detalleId: number,
+    nuevoEstado: string,
+    token: string
+  ): Promise<void> => {
+    const url = `${API_URL}/orders/${orderId}/details`;
+
+    try {
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          detallesOrdenIds: [detalleId],
+          estadoDetalleOrden: nuevoEstado,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Error ${response.status}`);
+      }
+
+      console.log("✅ Estado actualizado correctamente en el servidor");
+    } catch (error: any) {
+      console.error("🔴 Error en actualizarEstadoProducto:", error.message);
+      throw error;
+    }
+  },
+
+  finalizarPedido: async (orderId: number, token: string): Promise<void> => {
+    const url = `${API_URL}/orders/${orderId}/checkout`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "Content-Length": "0",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("🔴 ERROR 500 - DETALLE:", errorText);
+        throw new Error(errorText || `Error ${response.status}`);
+      }
+
+      console.log("✅ Checkout exitoso.");
+    } catch (error: any) {
+      console.error("🔴 Error en finalizarPedido:", error.message);
+      throw error;
     }
   },
 };

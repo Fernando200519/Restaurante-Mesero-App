@@ -1,10 +1,8 @@
-// src/types/auth.ts
-
 export interface Usuario {
   id: number;
   nombre: string;
   apellidoPaterno: string;
-  apellidoMaterno: string;
+  apellidoMaterno?: string;
   tipo: string;
   estado: string;
   correo: string;
@@ -14,15 +12,13 @@ export interface Usuario {
 
 export interface LoginResponse {
   accessToken: string;
-  refreshToken: string; // 👈 Agrega esta línea
+  refreshToken: string;
   infoUsuario: {
-    id: number;
     nombre: string;
     apellidoPaterno: string;
-    apellidoMaterno: string;
     tipo: string;
     fotoUrl?: string;
     estado: string;
-    telefono: string;
+    notificaciones?: any;
   };
 }

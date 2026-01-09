@@ -1,58 +1,67 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+
 import { Mesa } from "../types/mesa";
+import { COLORS, SPACING } from "../constants/theme";
 
 const STATUS_CONFIG = {
   disponible: {
     color: "#10B981",
-    bgColors: ["#ECFDF5", "#FFFFFF"],
-    borderColor: "#A7F3D0",
-    label: "Disponible",
+    bgColors: ["#F0FDF4", "#FFFFFF"] as [string, string],
+    borderColor: "#DCFCE7",
+    label: "Libre",
   },
   ocupada: {
     color: "#EF4444",
-    bgColors: ["#FEF2F2", "#FFFFFF"],
-    borderColor: "#FECACA",
+    bgColors: ["#FEF2F2", "#FFFFFF"] as [string, string],
+    borderColor: "#FEE2E2",
     label: "Ocupada",
   },
   esperando: {
     color: "#F59E0B",
-    bgColors: ["#FFFBEB", "#FFFFFF"],
-    borderColor: "#FDE68A",
-    label: "Esperando",
+    bgColors: ["#FFFBEB", "#FFFFFF"] as [string, string],
+    borderColor: "#FEF3C7",
+    label: "Por Cobrar",
   },
   agrupada: {
     color: "#8B5CF6",
-    bgColors: ["#F5F3FF", "#FFFFFF"],
-    borderColor: "#DDD6FE",
-    label: "Agrupada",
+    bgColors: ["#F5F3FF", "#FFFFFF"] as [string, string],
+    borderColor: "#EDE9FE",
+    label: "Unida",
   },
 };
+
+interface MesaCardProps {
+  mesa: Mesa;
+  onPress: (m: Mesa) => void;
+  showZona?: boolean;
+  currentUserId?: number;
+}
 
 export default function MesaCard({
   mesa,
   onPress,
   showZona,
-}: {
-  mesa: Mesa;
-  onPress: (m: Mesa) => void;
-  showZona?: boolean;
-}) {
-  const config = STATUS_CONFIG[mesa.estado] || STATUS_CONFIG.disponible;
+  currentUserId,
+}: MesaCardProps) {
+  const config =
+    STATUS_CONFIG[mesa.estado as keyof typeof STATUS_CONFIG] ||
+    STATUS_CONFIG.disponible;
 
-  const getInitials = (name: string) => {
-    return name
+  const isOccupied = mesa.estado === "ocupada" || mesa.estado === "esperando";
+  const isMyTable = isOccupied && mesa.meseroId === currentUserId;
+
+  const initials = useMemo(() => {
+    if (!mesa.nombreMesero) return "";
+    return mesa.nombreMesero
       .split(" ")
       .map((n) => n[0])
       .join("")
       .substring(0, 2)
       .toUpperCase();
-  };
-
-  const initials = mesa.mesero?.nombre ? getInitials(mesa.mesero.nombre) : "";
-  const mostrarOcupacion = mesa.estado !== "disponible";
+  }, [mesa.nombreMesero]);
 
   return (
     <TouchableOpacity
@@ -61,95 +70,100 @@ export default function MesaCard({
       style={styles.container}
     >
       <LinearGradient
-        colors={config.bgColors as [string, string]}
+        colors={config.bgColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.card, { borderColor: config.borderColor }]}
+        style={[
+          styles.card,
+          { borderColor: config.borderColor },
+          { borderWidth: 1.5 },
+        ]}
       >
-        {/* --- HEADER (Nombre, Zona, Estado) --- */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.titleWrapper}>
             <Text style={styles.tableName}>{mesa.nombre}</Text>
-            {showZona && (
-              <View style={styles.zonaRow}>
-                <Text style={styles.zonaText}>{mesa.zona}</Text>
-              </View>
-            )}
+            {showZona && <Text style={styles.zonaText}>{mesa.zona}</Text>}
           </View>
 
-          {/* Badge de Estado (Pill) */}
           <View
             style={[
-              styles.statusBadge,
+              styles.statusPill,
               { backgroundColor: `${config.color}15` },
             ]}
           >
-            <Text style={[styles.statusText, { color: config.color }]}>
+            <Text style={[styles.statusLabel, { color: config.color }]}>
               {config.label}
             </Text>
           </View>
         </View>
 
-        {/* --- OCUPACIÓN (CENTRO) --- */}
-        {mostrarOcupacion ? (
-          <View style={styles.ocupacionBadge}>
-            <Ionicons name="people" size={16} color="#4B5563" />
-            <Text style={styles.ocupantesNum}>{mesa.ocupantes}</Text>
-            <Text style={styles.capacidadLabel}>personas</Text>
-          </View>
-        ) : (
-          <View style={styles.spacer} />
-        )}
+        <View style={styles.body}>
+          {isOccupied ? (
+            <View style={styles.occupancyRow}>
+              <Ionicons
+                name="people-outline"
+                size={16}
+                color={COLORS.text.secondary}
+              />
+              <Text style={styles.occupancyText}>
+                <Text style={styles.boldText}>{mesa.comensales}</Text> personas
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.availableText}>Lista para servicio</Text>
+          )}
+        </View>
 
-        {/* --- FOOTER (Alerta y Mesero) --- */}
         <View style={styles.footer}>
-          {/* Alerta de Demora */}
-          <View>
-            {mesa.alerta && (
-              <View style={styles.alertBadge}>
-                <Ionicons name="time-outline" size={12} color="#DC2626" />
-                <Text style={styles.alertText}>Demora</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Info Mesero (Solo si NO está disponible) */}
-          {mesa.mesero && mostrarOcupacion && (
-            <View style={styles.waiterRow}>
-              <Text style={styles.waiterName}>{mesa.mesero.nombre}</Text>
-
-              {/* CÍRCULO DEL AVATAR */}
-              <View
-                style={[styles.avatarContainer, { borderColor: config.color }]}
-              >
-                {mesa.mesero.avatarUrl ? (
+          {mesa.nombreMesero && isOccupied ? (
+            <View style={styles.waiterInfo}>
+              <View style={styles.avatarWrapper}>
+                {mesa.fotoPerfilMesero ? (
                   <Image
-                    source={{ uri: mesa.mesero.avatarUrl }}
-                    style={styles.avatarImage}
+                    source={{ uri: mesa.fotoPerfilMesero }}
+                    style={styles.avatar}
                   />
                 ) : (
                   <View
                     style={[
-                      styles.initialsContainer,
-                      { backgroundColor: config.color },
+                      styles.initialsCircle,
+                      {
+                        backgroundColor: isMyTable ? "#000000" : "#E5E7EB",
+                      },
                     ]}
                   >
-                    <Text style={styles.avatarInitials}>{initials}</Text>
+                    <Text style={styles.initialsText}>{initials}</Text>
                   </View>
                 )}
-
-                {/* 👇 PUNTO DE ESTADO ACTUALIZADO */}
+                {/* ✅ INDICADOR DINÁMICO */}
                 <View
                   style={[
-                    styles.statusDot,
+                    styles.onlineIndicator,
                     {
-                      backgroundColor: mesa.mesero.online
+                      backgroundColor: mesa.meseroDisponible
                         ? "#22C55E"
                         : "#9CA3AF",
                     },
                   ]}
                 />
               </View>
+              <Text
+                style={[
+                  styles.waiterName,
+                  isMyTable && { color: "#000000", fontWeight: "900" },
+                ]}
+                numberOfLines={1}
+              >
+                {isMyTable ? "Tú" : mesa.nombreMesero.split(" ")[0]}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ height: 28 }} />
+          )}
+
+          {isMyTable && (
+            <View style={styles.miniBadgeBlack}>
+              <Text style={styles.miniBadgeTextWhite}>MÍA</Text>
             </View>
           )}
         </View>
@@ -161,158 +175,94 @@ export default function MesaCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    margin: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
+    margin: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
   },
   card: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 2,
-    minHeight: 145,
+    borderRadius: 18,
+    padding: SPACING.m,
+    minHeight: 155,
     justifyContent: "space-between",
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 10,
   },
+  titleWrapper: { flex: 1 },
   tableName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
-    color: "#111827",
-  },
-  zonaRow: {
-    marginTop: 2,
+    color: COLORS.text.primary,
+    letterSpacing: -0.5,
   },
   zonaText: {
     fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "500",
+    color: COLORS.text.muted,
+    fontWeight: "600",
+    marginTop: 2,
   },
-  statusBadge: {
+  statusPill: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  statusText: {
+  statusLabel: {
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "800",
     textTransform: "uppercase",
   },
-  ocupacionBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    gap: 6,
-  },
-  ocupantesNum: {
-    fontWeight: "bold",
-    color: "#111827",
-    fontSize: 14,
-  },
-  capacidadLabel: {
-    color: "#6B7280",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  spacer: {
-    height: 32,
+  body: { marginVertical: SPACING.s },
+  occupancyRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  occupancyText: { fontSize: 14, color: COLORS.text.secondary },
+  boldText: { fontWeight: "800", color: COLORS.text.primary },
+  availableText: {
+    fontSize: 13,
+    color: "#10B981",
+    fontWeight: "600",
+    fontStyle: "italic",
   },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
-    paddingTop: 10,
+    paddingTop: SPACING.s,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+    borderTopColor: "rgba(0,0,0,0.03)",
   },
-  alertBadge: {
-    flexDirection: "row",
+  waiterInfo: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatarWrapper: { position: "relative" },
+  avatar: { width: 28, height: 28, borderRadius: 14 },
+  initialsCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 6,
+  },
+  initialsText: { color: COLORS.white, fontSize: 10, fontWeight: "bold" },
+  onlineIndicator: {
+    position: "absolute",
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  waiterName: { fontSize: 12, color: COLORS.text.secondary },
+  miniBadgeBlack: {
+    backgroundColor: "#000000",
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: "#FEE2E2",
     borderRadius: 6,
   },
-  alertText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#DC2626",
-  },
-  waiterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  waiterName: {
-    fontSize: 11,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-
-  // AVATAR
-  avatarContainer: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  avatarImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#FFF",
-  },
-  initialsContainer: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#FFF",
-  },
-  avatarInitials: {
+  miniBadgeTextWhite: {
     color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  onlineDot: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#22C55E",
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-    zIndex: 10,
-  },
-  statusDot: {
-    // Antes era onlineDot
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    // backgroundColor: "#22C55E", <-- Elimina esta línea ya que ahora es dinámica
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-    zIndex: 10,
+    fontSize: 9,
+    fontWeight: "900",
   },
 });

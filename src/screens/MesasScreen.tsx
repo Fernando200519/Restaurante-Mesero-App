@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
+
 import { useMesas } from "../hooks/useMesas";
 import MesaCard from "../components/MesaCard";
 import { Mesa } from "../types/mesa";
@@ -21,10 +23,12 @@ import { mesasApi } from "../api/mesasApi";
 import TableDetailsModal from "../components/TableDetailsModal";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
+import { COLORS, SPACING } from "../constants/theme";
 
 export default function MesasScreen({ navigation }: any) {
   const { token, user, signOut, refreshSession } = useAuth();
   const { mesas, loading, refresh } = useMesas();
+
   const [zonaActual, setZonaActual] = useState<string>("Todas");
   const [busqueda, setBusqueda] = useState<string>("");
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
@@ -35,8 +39,12 @@ export default function MesasScreen({ navigation }: any) {
 
   const fetchZonas = async () => {
     if (token) {
-      const nombres = await mesasApi.getZonasActivas(token);
-      setZonasPermitidas(nombres);
+      try {
+        const nombres = await mesasApi.getZonasActivas(token);
+        setZonasPermitidas(nombres);
+      } catch (error) {
+        console.log("Error al cargar zonas");
+      }
     }
   };
 
@@ -54,34 +62,28 @@ export default function MesasScreen({ navigation }: any) {
           await refresh(true);
           await fetchZonas();
         } catch (error: any) {
-          console.log("🟡 Error detectado:", error.message);
-
           if (error.message.includes("Sesión expirada")) {
-            console.log("🔄 Iniciando rescate de sesión...");
-
-            // 1. Intentamos obtener el nuevo token
             const newToken = await refreshSession();
-
             if (newToken && isActive) {
-              // 2. Reintentamos la petición usando el token recientito 🚀
               await refresh(true, newToken);
             } else if (!newToken) {
-              // Si no hubo token nuevo, cerramos todo
-              clearInterval(intervalId);
-              isActive = false;
-              signOut();
-              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-              Alert.alert(
-                "Sesión Expirada",
-                "Tu sesión ha terminado por seguridad."
-              );
+              handleSessionExpired();
             }
           }
         }
       };
 
-      performUpdate();
+      const handleSessionExpired = () => {
+        isActive = false;
+        signOut();
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        Alert.alert(
+          "Seguridad",
+          "Tu sesión ha expirado. Por favor, ingresa de nuevo."
+        );
+      };
 
+      performUpdate();
       const intervalId = setInterval(performUpdate, 5000);
 
       return () => {
@@ -95,52 +97,61 @@ export default function MesasScreen({ navigation }: any) {
     setRefreshing(true);
     try {
       await Promise.all([refresh(false), fetchZonas()]);
-    } catch (error) {
-      console.error(error);
     } finally {
       setRefreshing(false);
     }
   };
 
-  const zonas = useMemo(() => {
-    if (zonasPermitidas.length === 0) return ["Todas"];
-    return ["Todas", ...zonasPermitidas.sort()];
-  }, [zonasPermitidas]);
-
-  useEffect(() => {
-    if (zonas.length > 0 && zonaActual === "") {
-      setZonaActual(zonas[0]);
-    }
-  }, [zonas, zonaActual]);
+  const zonas = useMemo(
+    () => ["Mis Mesas", "Todas", ...zonasPermitidas.sort()],
+    [zonasPermitidas]
+  );
 
   const mesasFiltradas = useMemo(() => {
-    const filtradas = mesas.filter((m) => {
-      const zonaDeMesa = m.zona || "General";
-      const esZonaValida =
-        zonasPermitidas.includes(zonaDeMesa) || zonaDeMesa === "General";
+    return mesas
+      .filter((m) => {
+        // 1. Lógica para la zona virtual "Mis Mesas"
+        if (zonaActual === "Mis Mesas") {
+          // Filtramos mesas donde el meseroId coincida con el ID del usuario actual
+          // Consideramos tanto "ocupada" como "esperando" (pendiente de pago)
+          return m.meseroId === user?.id && m.estado !== "disponible";
+        }
 
-      if (!esZonaValida) return false;
+        // 2. Lógica estándar para el resto de zonas
+        const zonaDeMesa = m.zona || "General";
+        const matchZona = zonaActual === "Todas" || zonaDeMesa === zonaActual;
+        const matchTexto = m.nombre
+          .toLowerCase()
+          .includes(busqueda.toLowerCase());
 
-      const matchZona = zonaActual === "Todas" || zonaDeMesa === zonaActual;
-      const matchTexto = m.nombre
-        .toLowerCase()
-        .includes(busqueda.toLowerCase());
+        return matchZona && matchTexto;
+      })
+      .sort((a, b) => a.id - b.id);
+  }, [mesas, zonaActual, busqueda, user?.id]); // ✅ Añadimos user?.id como dependencia
 
-      return matchZona && matchTexto;
-    });
+  const handleConfirmOpen = async (mesaId: number, comensales: number) => {
+    if (!token) {
+      Alert.alert("Sesión no válida", "Por favor, ingresa de nuevo.");
+      return;
+    }
 
-    return filtradas.sort((a, b) => {
-      return parseInt(a.id) - parseInt(b.id);
-    });
-  }, [mesas, zonaActual, busqueda, zonasPermitidas]);
+    try {
+      const nuevaOrden = await mesasApi.ocuparMesa(mesaId, comensales, token);
 
-  const handlePressMesa = (m: Mesa) => {
-    setSelectedMesa(m);
+      setOpeningModalVisible(false);
+      setSelectedMesa(null);
 
-    if (m.estado === "ocupada") {
-      setDetailsModalVisible(true);
-    } else {
-      setOpeningModalVisible(true);
+      navigation.navigate("Comanda", {
+        mesaId: mesaId.toString(),
+        mesaNombre: selectedMesa?.nombre || mesaId.toString(),
+        numComensales: comensales,
+        orderId: nuevaOrden.id,
+      });
+
+      await refresh();
+    } catch (error: any) {
+      console.error("Error al abrir mesa:", error);
+      Alert.alert("Error de Sistema", "No se pudo abrir la mesa.");
     }
   };
 
@@ -148,92 +159,71 @@ export default function MesasScreen({ navigation }: any) {
     setDetailsModalVisible(false);
     if (selectedMesa) {
       navigation.navigate("Comanda", {
-        mesaId: selectedMesa.id,
-        numeroMesa: parseInt(selectedMesa.id),
-        numComensales: selectedMesa.ocupantes,
-        orderId: selectedMesa.orderId,
+        mesaId: selectedMesa.id.toString(),
+        mesaNombre: selectedMesa.nombre,
+        numComensales: selectedMesa.comensales,
+        orderId: selectedMesa.ordenId,
       });
-    }
-  };
-
-  const handleConfirmOpen = async (mesaId: number, comensales: number) => {
-    if (!token || !user || !user.id) {
-      Alert.alert("Error", "No estás autenticado correctamente.");
-      return;
-    }
-
-    try {
-      const nuevaOrden = await mesasApi.ocuparMesa(
-        mesaId,
-        user.id,
-        comensales,
-        token
-      );
-
-      setOpeningModalVisible(false);
-
-      setSelectedMesa(null);
-
-      navigation.navigate("Comanda", {
-        mesaId: mesaId.toString(),
-        numeroMesa: mesaId,
-        numComensales: comensales,
-        orderId: nuevaOrden.id || nuevaOrden.orderId,
-      });
-
-      refresh();
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "No se pudo abrir la mesa.");
     }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <StatusBar style="dark" />
       <HomeHeader navigation={navigation} />
 
-      <View style={styles.headerContainer}>
-        {/* Buscador */}
-        <View style={styles.searchBar}>
-          <Ionicons
-            name="search"
-            size={20}
-            color="#9E9E9E"
-            style={{ marginRight: 8 }}
-          />
+      {/* Sección de Búsqueda y Filtros */}
+      <View style={styles.filterSection}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color={COLORS.text.muted} />
           <TextInput
-            placeholder="Buscar mesa..."
-            placeholderTextColor="#9E9E9E"
+            placeholder="Buscar por número o nombre..."
+            placeholderTextColor={COLORS.text.muted}
             style={styles.searchInput}
             value={busqueda}
             onChangeText={setBusqueda}
           />
           {busqueda.length > 0 && (
             <TouchableOpacity onPress={() => setBusqueda("")}>
-              <Ionicons name="close-circle" size={18} color="#9E9E9E" />
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={COLORS.text.muted}
+              />
             </TouchableOpacity>
           )}
         </View>
-      </View>
 
-      {/* Zonas */}
-      <View style={{ height: 50, marginTop: 10 }}>
         <FlatList
           data={zonas}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(z) => z}
-          contentContainerStyle={styles.zonasContainer}
+          contentContainerStyle={styles.zonasScroll}
+          // En el renderItem de la lista de zonas
           renderItem={({ item }) => {
             const active = zonaActual === item;
+            const isPersonalZone = item === "Mis Mesas";
+
             return (
               <TouchableOpacity
                 onPress={() => setZonaActual(item)}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
+                style={[
+                  styles.zonaChip,
+                  active && styles.zonaChipActive,
+                  isPersonalZone && !active && { borderColor: COLORS.primary },
+                ]}
               >
-                <View
-                  style={[styles.zonaChip, active && styles.zonaChipActive]}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {isPersonalZone && (
+                    <Ionicons
+                      name="star"
+                      size={14}
+                      color={active ? COLORS.white : COLORS.primary}
+                      style={{ marginRight: 6 }}
+                    />
+                  )}
                   <Text
                     style={[styles.zonaText, active && styles.zonaTextActive]}
                   >
@@ -246,10 +236,11 @@ export default function MesasScreen({ navigation }: any) {
         />
       </View>
 
-      {/* Grid de Mesas */}
+      {/* Listado de Mesas */}
       {loading && mesas.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#FA9623" />
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Cargando plano de mesas...</Text>
         </View>
       ) : (
         <FlatList
@@ -259,37 +250,55 @@ export default function MesasScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing || loading}
+              refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#FA9623"]}
-              tintColor="#FA9623"
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
             />
           }
           renderItem={({ item }) => (
             <MesaCard
               mesa={item}
-              onPress={handlePressMesa}
+              onPress={(m) => {
+                setSelectedMesa(m);
+                m.estado.toLowerCase() === "ocupada"
+                  ? setDetailsModalVisible(true)
+                  : setOpeningModalVisible(true);
+              }}
               showZona={zonaActual === "Todas"}
+              currentUserId={user?.id}
             />
           )}
           contentContainerStyle={styles.gridContent}
+          // En el ListEmptyComponent de la FlatList
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="search-outline" size={48} color="#E0E0E0" />
-              <Text style={styles.emptyText}>No se encontraron mesas.</Text>
+              <Ionicons
+                name={
+                  zonaActual === "Mis Mesas"
+                    ? "cafe-outline"
+                    : "restaurant-outline"
+                }
+                size={64}
+                color="#E0E0E0"
+              />
+              <Text style={styles.emptyText}>
+                {zonaActual === "Mis Mesas"
+                  ? "¡Todo al día! No tienes mesas activas en este momento."
+                  : "No hay mesas disponibles en esta zona."}
+              </Text>
             </View>
           }
         />
       )}
-      {/* Modal de Apertura (Libre) */}
+
+      {/* Modales de Gestión */}
       <TableOpeningModal
         visible={isOpeningModalVisible}
         mesa={selectedMesa}
         onClose={() => setOpeningModalVisible(false)}
         onConfirm={handleConfirmOpen}
       />
-
-      {/* Modal de Detalles (Ocupada) */}
       <TableDetailsModal
         visible={isDetailsModalVisible}
         mesa={selectedMesa}
@@ -301,44 +310,94 @@ export default function MesasScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9F9F9" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    backgroundColor: "#fff",
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
   },
-  searchBar: {
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterSection: {
+    backgroundColor: COLORS.background,
+    paddingVertical: SPACING.s,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginHorizontal: SPACING.l,
+    paddingHorizontal: SPACING.m,
+    height: 48,
+    marginBottom: SPACING.s,
   },
-  searchInput: { flex: 1, fontSize: 16, color: "#333" },
-
-  zonasContainer: { paddingHorizontal: 12, alignItems: "center" },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text.primary,
+    marginLeft: SPACING.s,
+  },
+  zonasScroll: {
+    paddingHorizontal: SPACING.m,
+    paddingBottom: SPACING.xs,
+  },
   zonaChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    marginRight: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    marginRight: SPACING.s,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "#EAEAEA",
   },
-  zonaChipActive: { backgroundColor: "#FA9623", borderColor: "#FA9623" },
-  zonaText: { color: "#757575", fontWeight: "600", fontSize: 13 },
-  zonaTextActive: { color: "#FFF", fontWeight: "700" },
-
-  gridContent: { paddingTop: 10, paddingHorizontal: 8, paddingBottom: 40 },
+  zonaChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  zonaText: {
+    color: COLORS.text.secondary,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  zonaTextActive: {
+    color: COLORS.white,
+    fontWeight: "700",
+  },
+  gridContent: {
+    paddingTop: SPACING.s,
+    paddingHorizontal: SPACING.s,
+    paddingBottom: 100,
+  },
+  loadingText: {
+    marginTop: SPACING.m,
+    color: COLORS.text.muted,
+    fontSize: 14,
+    fontWeight: "500",
+  },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 60,
+    marginTop: 80,
   },
-  emptyText: { color: "#9E9E9E", marginTop: 10, fontSize: 16 },
+  emptyText: {
+    color: COLORS.text.muted,
+    marginTop: SPACING.m,
+    fontSize: 15,
+    textAlign: "center",
+    paddingHorizontal: SPACING.xxl,
+  },
 });

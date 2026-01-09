@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+
 import {
   View,
   Text,
@@ -8,74 +9,40 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RouteProp } from "@react-navigation/native";
+
 import { mesasApi } from "../api/mesasApi";
 import { useAuth } from "../context/AuthContext";
+import { COLORS, SPACING } from "../constants/theme";
 
-interface Product {
-  id: number;
-  nombre: string;
-  precio: number;
-  imagen: string;
-}
-
-interface CartItem {
-  producto: Product;
-  cantidad: number;
-}
-
-interface Props {
-  navigation: NativeStackNavigationProp<any>;
-  route: RouteProp<any, "ResumenPedido">;
-}
-
-export default function ResumenPedidoScreen({ navigation, route }: Props) {
+export default function ResumenPedidoScreen({ navigation, route }: any) {
   const { user, token } = useAuth();
   const {
     cart: initialCart,
     comensalNombre,
     mesaId,
     orderId,
-    comensalId,
     updateCart,
-  } = route.params as {
-    cart: CartItem[];
-    comensalNombre: string;
-    comensalId: number;
-    mesaId: number;
-    orderId: number;
-    updateCart: (cart: CartItem[]) => void;
-  };
+  } = route.params;
 
-  const [localCart, setLocalCart] = useState<CartItem[]>(initialCart);
+  const [localCart, setLocalCart] = useState(initialCart);
   const [loading, setLoading] = useState(false);
 
-  const subtotal = localCart.reduce(
-    (acc, item) => acc + item.producto.precio * item.cantidad,
+  const total = localCart.reduce(
+    (acc: number, item: any) => acc + item.producto.precio * item.cantidad,
     0
   );
-  const total = subtotal;
 
-  const handleIncrement = (id: number) => {
-    setLocalCart((prev) =>
-      prev.map((item) =>
-        item.producto.id === id
-          ? { ...item, cantidad: item.cantidad + 1 }
-          : item
-      )
-    );
-  };
-
-  const handleDecrement = (id: number) => {
-    setLocalCart((prev) =>
+  const updateQty = (id: number, delta: number) => {
+    setLocalCart((prev: any[]) =>
       prev.map((item) => {
         if (item.producto.id === id) {
-          return { ...item, cantidad: Math.max(1, item.cantidad - 1) };
+          const newQty = Math.max(1, item.cantidad + delta);
+          return { ...item, cantidad: newQty };
         }
         return item;
       })
@@ -83,38 +50,27 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert("Eliminar producto", "¿Estás seguro?", [
+    Alert.alert("Eliminar", "¿Quitar este producto del pedido?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Eliminar",
         style: "destructive",
         onPress: () =>
-          setLocalCart((prev) =>
-            prev.filter((item) => item.producto.id !== id)
+          setLocalCart((prev: any[]) =>
+            prev.filter((i) => i.producto.id !== id)
           ),
       },
     ]);
   };
 
-  const handleSeguirAgregando = () => {
-    // 1. Guardamos los cambios en la pantalla de abajo (Menú)
-    if (updateCart) {
-      updateCart(localCart);
-    }
-
-    // 2. Regresamos físicamente (rompiendo el bucle)
+  const handleBack = () => {
+    if (updateCart) updateCart(localCart);
     navigation.goBack();
   };
 
   const handleEnviarCocina = async () => {
-    if (localCart.length === 0) return;
-
-    if (!token || !user || !user.id) {
-      Alert.alert("Error", "No hay sesión activa");
-      return;
-    }
-    if (!orderId) {
-      Alert.alert("Error", "No se identificó el número de orden.");
+    if (!token || !orderId) {
+      Alert.alert("Error", "Información incompleta.");
       return;
     }
 
@@ -123,70 +79,51 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
       await mesasApi.agregarProductosOrden(
         orderId,
         localCart,
-        user.id,
         comensalNombre,
         token
       );
 
-      Alert.alert("¡Enviado!", `Orden de ${comensalNombre} enviada a cocina.`, [
-        {
-          text: "OK",
-          onPress: () => {
-            navigation.pop(2);
-          },
-        },
-      ]);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "No se pudo enviar la orden al sistema.");
-    } finally {
+      navigation.pop(2);
+    } catch (error: any) {
       setLoading(false);
+      Alert.alert("Error", "No se pudo enviar: " + error.message);
     }
   };
 
-  const renderItem = ({ item }: { item: CartItem }) => (
+  const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <Image source={{ uri: item.producto.imagen }} style={styles.image} />
-
-      <View style={styles.cardBody}>
+      <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
-          <Text style={styles.prodName} numberOfLines={2}>
+          <Text style={styles.prodName} numberOfLines={1}>
             {item.producto.nombre}
           </Text>
-          <TouchableOpacity
-            onPress={() => handleDelete(item.producto.id)}
-            style={styles.deleteBtn}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+          <TouchableOpacity onPress={() => handleDelete(item.producto.id)}>
+            <Ionicons name="trash-outline" size={18} color={COLORS.error} />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.unitPrice}>
+        <Text style={styles.priceUnit}>
           ${item.producto.precio.toFixed(2)} c/u
         </Text>
 
-        <View style={styles.controlsRow}>
-          {/* Controles de Cantidad */}
-          <View style={styles.qtyContainer}>
+        <View style={styles.cardFooter}>
+          <View style={styles.qtySelector}>
             <TouchableOpacity
-              onPress={() => handleDecrement(item.producto.id)}
+              onPress={() => updateQty(item.producto.id, -1)}
               style={styles.qtyBtn}
             >
-              <Ionicons name="remove" size={18} color="#555" />
+              <Ionicons name="remove" size={16} color={COLORS.text.primary} />
             </TouchableOpacity>
-
-            <Text style={styles.qtyText}>{item.cantidad}</Text>
-
+            <Text style={styles.qtyValue}>{item.cantidad}</Text>
             <TouchableOpacity
-              onPress={() => handleIncrement(item.producto.id)}
+              onPress={() => updateQty(item.producto.id, 1)}
               style={styles.qtyBtn}
             >
-              <Ionicons name="add" size={18} color="#555" />
+              <Ionicons name="add" size={16} color={COLORS.text.primary} />
             </TouchableOpacity>
           </View>
-
-          {/* Subtotal del item */}
-          <Text style={styles.itemSubtotal}>
+          <Text style={styles.itemTotal}>
             ${(item.producto.precio * item.cantidad).toFixed(2)}
           </Text>
         </View>
@@ -198,77 +135,68 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar style="dark" />
 
-      {/* HEADER */}
+      {/* CUSTOM HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={handleSeguirAgregando}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={28} color={COLORS.primary} />
         </TouchableOpacity>
-        <View style={{ alignItems: "center" }}>
+        <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Revisar Orden</Text>
-          <Text style={styles.headerSubtitle}>{comensalNombre}</Text>
+          <Text style={styles.headerSubtitle}>
+            Mesa {mesaId} • {comensalNombre}
+          </Text>
         </View>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* LISTA DE ITEMS */}
-      {localCart.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="basket-outline" size={64} color="#DDD" />
-          <Text style={styles.emptyText}>El carrito está vacío</Text>
-          <TouchableOpacity
-            style={styles.emptyBtn}
-            onPress={handleSeguirAgregando}
-          >
-            <Text style={styles.emptyBtnText}>Volver al Menú</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={localCart}
-          keyExtractor={(item) => item.producto.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-        />
-      )}
+      <FlatList
+        data={localCart}
+        keyExtractor={(item) => item.producto.id.toString()}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cart-outline" size={80} color={COLORS.surface} />
+            <Text style={styles.emptyText}>No hay productos en el resumen</Text>
+            <TouchableOpacity style={styles.returnBtn} onPress={handleBack}>
+              <Text style={styles.returnBtnText}>Volver al Menú</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
-      {/* FOOTER (RESUMEN Y BOTONES) */}
       {localCart.length > 0 && (
-        <View style={styles.footer}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
+        <View style={styles.checkoutContainer}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total a enviar:</Text>
+            <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
           </View>
 
-          <View style={styles.footerButtons}>
-            {/* Botón Seguir Agregando */}
+          <View style={styles.actionRow}>
             <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={handleSeguirAgregando}
+              style={styles.btnSecondary}
+              onPress={handleBack}
               disabled={loading}
             >
-              <Text style={styles.secondaryBtnText}>Seguir agregando</Text>
+              <Text style={styles.btnSecondaryText}>Seguir Pidiendo</Text>
             </TouchableOpacity>
 
-            {/* Botón Enviar a Cocina */}
             <TouchableOpacity
-              style={styles.primaryBtn}
+              style={[styles.btnPrimary, { backgroundColor: COLORS.primary }]}
               onPress={handleEnviarCocina}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#FFF" />
+                <ActivityIndicator color={COLORS.white} />
               ) : (
                 <>
                   <Ionicons
-                    name="paper-plane-outline"
-                    size={20}
-                    color="#FFF"
+                    name="send"
+                    size={18}
+                    color={COLORS.white}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.primaryBtnText}>Enviar a Cocina</Text>
+                  <Text style={styles.btnPrimaryText}>Enviar Pedido</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -280,138 +208,143 @@ export default function ResumenPedidoScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9F9F9" },
-
-  // Header
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
+    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#333" },
-  headerSubtitle: { fontSize: 13, color: "#FA9623", fontWeight: "600" },
+  backBtn: {
+    padding: 8,
+    backgroundColor: `${COLORS.primary}10`,
+    borderRadius: 12,
+  },
+  headerTitleContainer: { alignItems: "center" },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: COLORS.text.primary },
+  headerSubtitle: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
 
-  // Lista
-  listContent: { padding: 16 },
-
-  // Card
+  list: { padding: SPACING.m, paddingBottom: 150 },
   card: {
     flexDirection: "row",
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: SPACING.m,
+    marginBottom: SPACING.m,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
   image: {
-    width: 70,
-    height: 70,
-    borderRadius: 8,
-    backgroundColor: "#EEE",
+    width: 80,
+    height: 80,
+    borderRadius: 15,
+    backgroundColor: COLORS.surface,
   },
-  cardBody: { flex: 1, marginLeft: 12, justifyContent: "space-between" },
+  cardContent: {
+    flex: 1,
+    marginLeft: SPACING.m,
+    justifyContent: "space-between",
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   prodName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.text.primary,
     flex: 1,
-    marginRight: 8,
   },
-  deleteBtn: { padding: 4 },
-  unitPrice: { fontSize: 12, color: "#999", marginTop: -4 },
-
-  // Controls
-  controlsRow: {
+  priceUnit: { fontSize: 12, color: COLORS.text.muted, marginTop: 2 },
+  cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 8,
   },
-  qtyContainer: {
+  qtySelector: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 4,
   },
-  qtyBtn: { padding: 6, paddingHorizontal: 10 },
-  qtyText: {
+  qtyBtn: { padding: 8 },
+  qtyValue: {
     fontSize: 15,
-    fontWeight: "bold",
-    minWidth: 20,
+    fontWeight: "800",
+    color: COLORS.text.primary,
+    minWidth: 24,
     textAlign: "center",
   },
-  itemSubtotal: { fontSize: 15, fontWeight: "bold", color: "#333" },
+  itemTotal: { fontSize: 16, fontWeight: "800", color: COLORS.text.primary },
 
-  // Footer
-  footer: {
-    backgroundColor: "#FFF",
-    padding: 20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  checkoutContainer: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    backgroundColor: COLORS.white,
+    padding: SPACING.l,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
     elevation: 20,
   },
-  summaryRow: {
+  totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  totalLabel: { fontSize: 18, color: "#666" },
-  totalAmount: { fontSize: 24, fontWeight: "bold", color: "#333" },
-
-  footerButtons: { flexDirection: "row", gap: 12 },
-  secondaryBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FA9623",
     alignItems: "center",
-    justifyContent: "center",
+    marginBottom: SPACING.l,
   },
-  secondaryBtnText: { color: "#FA9623", fontWeight: "bold", fontSize: 16 },
-  primaryBtn: {
+  totalLabel: { fontSize: 16, color: COLORS.text.secondary, fontWeight: "600" },
+  totalValue: { fontSize: 28, fontWeight: "900", color: COLORS.text.primary },
+  actionRow: { flexDirection: "row", gap: 12 },
+  btnSecondary: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    alignItems: "center",
+  },
+  btnSecondaryText: { color: COLORS.primary, fontWeight: "800", fontSize: 15 },
+  btnPrimary: {
     flex: 1.5,
-    backgroundColor: "#FA9623",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
     flexDirection: "row",
-  },
-  primaryBtnText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
-
-  // Empty State
-  emptyContainer: {
-    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 50,
   },
-  emptyText: { fontSize: 16, color: "#999", marginTop: 10, marginBottom: 20 },
-  emptyBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: "#EEE",
-    borderRadius: 8,
+  btnPrimaryText: { color: COLORS.white, fontWeight: "800", fontSize: 16 },
+
+  emptyContainer: { alignItems: "center", marginTop: 100 },
+  emptyText: {
+    color: COLORS.text.muted,
+    fontSize: 16,
+    marginVertical: SPACING.m,
   },
-  emptyBtnText: { color: "#555", fontWeight: "600" },
+  returnBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+  },
+  returnBtnText: { color: COLORS.text.secondary, fontWeight: "700" },
 });

@@ -1,5 +1,11 @@
+// 1. React y Hooks
 import React from "react";
+
+// 2. Librerías Externas (UI)
 import { View, Text, Image, StyleSheet } from "react-native";
+
+// 3. Recursos Locales (Arquitectura Limpia)
+import { COLORS } from "../constants/theme";
 
 interface AvatarProps {
   nombre: string;
@@ -13,10 +19,9 @@ export default function Avatar({
   nombre,
   online = false,
   avatarUrl,
-  size = 40, // Tamaño estándar cómodo para touch
+  size = 40,
   showBadge = true,
 }: AvatarProps) {
-  // Generación de iniciales segura
   const initials = nombre
     ? nombre
         .split(" ")
@@ -26,47 +31,46 @@ export default function Avatar({
         .toUpperCase()
     : "?";
 
-  // Cálculos dinámicos basados en el tamaño
   const borderRadius = size / 2;
   const fontSize = size * 0.4;
-  const dotSize = size * 0.28; // El punto es aprox el 28% del avatar
 
   return (
-    <View style={{ width: size, height: size, position: "relative" }}>
+    <View style={[styles.wrapper, { width: size, height: size }]}>
       {avatarUrl ? (
         <Image
           source={{ uri: avatarUrl }}
-          style={[styles.base, { width: size, height: size, borderRadius }]}
+          style={[styles.image, { width: size, height: size, borderRadius }]}
         />
       ) : (
         <View
           style={[
-            styles.base,
             styles.fallback,
-            { width: size, height: size, borderRadius },
+            {
+              width: size,
+              height: size,
+              borderRadius,
+              backgroundColor: `${COLORS.primary}15`,
+              borderColor: `${COLORS.primary}30`,
+            },
           ]}
         >
-          <Text style={[styles.text, { fontSize }]}>{initials}</Text>
+          <Text style={[styles.text, { fontSize, color: COLORS.primary }]}>
+            {initials}
+          </Text>
         </View>
       )}
-
-      {/* 👇 AQUÍ ESTABA EL ERROR:
-         Antes tenías un <View> aquí sin condición. Lo he borrado.
-         Solo dejamos este bloque que verifica "showBadge":
-      */}
 
       {showBadge && (
         <View
           style={[
             styles.statusDot,
             {
-              backgroundColor: online ? "#4CAF50" : "#BDBDBD",
-              width: size * 0.3,
-              height: size * 0.3,
-              borderRadius: size * 0.15,
-              // Ajustamos el borde dinámicamente según el tamaño
+              backgroundColor: online ? "#22C55E" : "#BDBDBD",
+              width: size * 0.28,
+              height: size * 0.28,
+              borderRadius: (size * 0.28) / 2,
               borderWidth: Math.max(2, size * 0.05),
-              borderColor: "#FFFFFF",
+              borderColor: COLORS.white,
             },
           ]}
         />
@@ -76,32 +80,28 @@ export default function Avatar({
 }
 
 const styles = StyleSheet.create({
-  base: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5", // Fondo base por si la imagen es transparente
+  wrapper: {
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  image: {
+    backgroundColor: COLORS.surface,
   },
   fallback: {
-    backgroundColor: "#FFF3E0", // Fondo naranja muy suave
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#FFE0B2", // Borde sutil
   },
   text: {
-    fontWeight: "700",
-    color: "#EF6C00", // Naranja oscuro para contraste
-  },
-  dot: {
-    position: "absolute",
-    right: -2, // Un poco salido para que no tape la cara
-    bottom: -2,
-    borderColor: "#FFFFFF",
-    zIndex: 1, // Asegura que flote encima
+    fontWeight: "800",
   },
   statusDot: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    borderWidth: 2,
-    borderColor: "#FFFFFF", // Borde blanco para que se separe de la foto
+    elevation: 2,
   },
 });

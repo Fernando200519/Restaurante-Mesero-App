@@ -1,9 +1,10 @@
 import * as React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { StatusBar } from "react-native";
+import { StatusBar, Platform } from "react-native";
 
 import { AuthProvider } from "./context/AuthContext";
+import { COLORS } from "./constants/theme";
 
 import LoginScreen from "./screens/LoginScreen";
 import MesasScreen from "./screens/MesasScreen";
@@ -20,15 +21,21 @@ export type RootStackParamList = {
   ChangePassword: undefined;
   Comanda: {
     mesaId: string;
-    numeroMesa: number;
+    mesaNombre: string;
     numComensales: number;
+    orderId: number;
   };
-  MenuProductos: { comensalId: number; comensalNombre: string };
+  MenuProductos: {
+    orderId: number;
+    comensal: string;
+    mesaId?: string | number;
+  };
   ResumenPedido: {
     cart: any[];
     comensalNombre: string;
-    comensalId: number;
-    mesaId: number;
+    orderId: number;
+    mesaId: number | string;
+    updateCart: (cart: any[]) => void;
   };
 };
 
@@ -38,17 +45,29 @@ export default function App() {
   return (
     <AuthProvider>
       <NavigationContainer>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        {/* 👇 AGREGA ESTA LÍNEA */}
+        {/* StatusBar consistente con el fondo blanco de la app */}
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={COLORS.background}
+        />
 
         <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
-            headerStyle: { backgroundColor: "#FA9623" },
-            headerTintColor: "#fff",
+            headerStyle: {
+              backgroundColor: COLORS.background,
+            },
+            headerTintColor: COLORS.primary, // Iconos y botones en #FF8108
             headerTitleAlign: "center",
-            headerTitleStyle: { fontWeight: "bold" },
+            headerTitleStyle: {
+              fontWeight: "800",
+              color: COLORS.text.primary,
+              fontSize: 18,
+            },
+            headerShadowVisible: false,
             headerShown: true,
+            animation:
+              Platform.OS === "android" ? "fade_from_bottom" : "default",
           }}
         >
           <Stack.Screen
@@ -74,7 +93,7 @@ export default function App() {
           <Stack.Screen
             name="Comanda"
             component={ComandaScreen}
-            options={{ headerShown: false }}
+            options={{ headerShown: true }}
           />
           <Stack.Screen
             name="MenuProductos"

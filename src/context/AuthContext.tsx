@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from "react";
 import { Usuario } from "../types/auth";
 import { authApi } from "../api/authApi";
 import { storage } from "../utils/storage";
+import { jwtDecode } from "jwt-decode";
 
 interface AuthContextType {
   user: Usuario | null;
@@ -40,33 +41,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (correo: string, contrasena: string) => {
     try {
       const loginData = await authApi.login(correo, contrasena);
+      const { accessToken, refreshToken } = loginData;
 
-      await storage.saveTokens(loginData.accessToken, loginData.refreshToken);
+      await storage.saveTokens(accessToken, refreshToken);
+      setToken(accessToken);
+      setRefreshToken(refreshToken);
 
-      setToken(loginData.accessToken);
-      setRefreshToken(loginData.refreshToken);
+      const decoded: any = jwtDecode(accessToken);
+      console.log("Decoded JWT:", decoded);
+      const empleadoId = parseInt(decoded.EmployeeId);
 
-      let datosUsuario = loginData.infoUsuario;
-
-      if (datosUsuario.estado !== "Inactivo") {
-        try {
-          const perfilEnriquecido = await authApi.getMe(loginData.accessToken);
-          datosUsuario = { ...datosUsuario, ...perfilEnriquecido };
-        } catch (perfilError) {
-          console.log("No se pudo enriquecer el perfil");
-        }
+      let perfilExtra: any = {};
+      try {
+        perfilExtra = await authApi.getMe(accessToken);
+      } catch (e) {
+        console.log("No se pudo enriquecer el perfil");
       }
 
       const usuarioLogueado: Usuario = {
-        id: datosUsuario.id,
-        nombre: datosUsuario.nombre,
-        apellidoPaterno: datosUsuario.apellidoPaterno,
-        apellidoMaterno: datosUsuario.apellidoMaterno,
-        tipo: datosUsuario.tipo,
-        estado: datosUsuario.estado,
-        correo: correo,
-        avatarUrl: datosUsuario.fotoUrl,
-        telefono: datosUsuario.telefono,
+        id: empleadoId,
+        nombre: loginData.infoUsuario.nombre,
+        apellidoPaterno: loginData.infoUsuario.apellidoPaterno,
+        apellidoMaterno: perfilExtra.apellidoMaterno || "",
+        tipo: loginData.infoUsuario.tipo,
+        estado: loginData.infoUsuario.estado,
+        correo: perfilExtra.correo || correo,
+        avatarUrl: loginData.infoUsuario.fotoUrl,
+        telefono: perfilExtra.telefono,
       };
 
       setUser(usuarioLogueado);
@@ -103,7 +104,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const refreshSession = async (): Promise<string | null> => {
-    // Cambia boolean por string | null
     if (!refreshToken) return null;
 
     try {
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setRefreshToken(newRefresh);
 
       console.log("✅ ¡Sesión renovada con éxito! Nuevo token listo.");
-      return newAccess; // Devuelve el nuevo token
+      return newAccess;
     } catch (error) {
       console.log("❌ Error en rotación. Cerrando sesión...");
       await signOut();

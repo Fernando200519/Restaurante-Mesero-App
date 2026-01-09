@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+
 import {
   Modal,
   View,
@@ -7,37 +8,32 @@ import {
   TouchableOpacity,
   Pressable,
   ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
   Platform,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { Image } from "expo-image";
 
-// Tipos rápidos (puedes importarlos de tu archivo types)
-interface Opcion {
+import { COLORS, SPACING } from "../constants/theme";
+import { Producto, Complemento, IngredienteOpcional } from "../types/producto";
+
+interface OpcionSeleccionada {
   id: number;
   nombre: string;
   precio: number;
-}
-interface Grupo {
-  id: string;
-  titulo: string;
-  opciones: Opcion[];
-  min: number;
-  max: number;
-}
-interface Product {
-  id: number;
-  nombre: string;
-  precio: number;
-  modificadores?: Grupo[];
+  tipo: "complemento" | "ingrediente";
 }
 
 interface Props {
   visible: boolean;
-  producto: Product | null;
+  producto: Producto | null;
   onClose: () => void;
   onAddToCart: (
-    producto: Product,
-    opcionesSeleccionadas: Opcion[],
+    producto: Producto,
+    opcionesSeleccionadas: OpcionSeleccionada[],
     precioFinal: number,
     notas: string
   ) => void;
@@ -49,108 +45,147 @@ export default function ProductDetailsModal({
   onClose,
   onAddToCart,
 }: Props) {
-  const [selectedOptions, setSelectedOptions] = useState<Opcion[]>([]);
-  const [nota, setNota] = useState(""); // Por si quieres agregar notas de texto libre después
+  const [selectedOptions, setSelectedOptions] = useState<OpcionSeleccionada[]>(
+    []
+  );
+  const [nota, setNota] = useState("");
 
-  // Limpiar estado al abrir
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
   useEffect(() => {
     if (visible) {
       setSelectedOptions([]);
       setNota("");
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 50,
+      }).start();
     }
   }, [visible, producto]);
 
-  if (!producto) return null;
-
-  // Calculamos precio dinámico
-  const precioExtra = selectedOptions.reduce((acc, opt) => acc + opt.precio, 0);
-  const precioFinal = producto.precio + precioExtra;
-
-  const toggleOption = (opcion: Opcion, grupo: Grupo) => {
-    // Verificamos si ya está seleccionada
-    const isSelected = selectedOptions.find((o) => o.id === opcion.id);
-
-    if (isSelected) {
-      // Quitarla
-      setSelectedOptions((prev) => prev.filter((o) => o.id !== opcion.id));
-    } else {
-      // Agregarla
-      // Aquí podrías validar grupo.max (si es selección única, quitar las otras del mismo grupo)
-      if (grupo.max === 1) {
-        // Si es selección única (Radio), quitamos las otras de este grupo primero
-        const otrosIdsDelGrupo = grupo.opciones.map((o) => o.id);
-        const limpio = selectedOptions.filter(
-          (o) => !otrosIdsDelGrupo.includes(o.id)
-        );
-        setSelectedOptions([...limpio, opcion]);
-      } else {
-        // Selección múltiple
-        setSelectedOptions((prev) => [...prev, opcion]);
-      }
-    }
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: 600,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => onClose());
   };
+
+  const precioFinal = useMemo(() => {
+    if (!producto) return 0;
+    const precioExtra = selectedOptions.reduce(
+      (acc, opt) => acc + opt.precio,
+      0
+    );
+    return producto.precio + precioExtra;
+  }, [producto, selectedOptions]);
+
+  const toggleOption = (
+    item: Complemento | IngredienteOpcional,
+    tipo: "complemento" | "ingrediente"
+  ) => {
+    setSelectedOptions((prev) => {
+      const exists = prev.find((o) => o.id === item.id && o.tipo === tipo);
+      if (exists) {
+        return prev.filter((o) => o.id !== item.id || o.tipo !== tipo);
+      }
+      return [
+        ...prev,
+        {
+          id: item.id,
+          nombre: item.nombre,
+          precio: "precio" in item ? item.precio : 0,
+          tipo,
+        },
+      ];
+    });
+  };
+
+  if (!producto) return null;
 
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>{producto.nombre}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color="#666" />
+      {/* Fondo con desenfoque: Ahora solo se desvanece */}
+      <BlurView
+        intensity={Platform.OS === "ios" ? 30 : 100}
+        style={styles.absolute}
+        tint="dark"
+      >
+        <Pressable style={styles.overlay} onPress={handleClose} />
+      </BlurView>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
+      >
+        {/* 3. HOJA ANIMADA: Solo esta sección se desliza */}
+        <Animated.View
+          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        >
+          {/* Header Imagen con truco del hash */}
+          <View style={styles.imageContainer}>
+            <Image
+              source={producto.imagen ? `${producto.imagen}#.jpg` : null}
+              style={styles.productImage}
+              contentFit="cover"
+              transition={500}
+            />
+            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color={COLORS.text.primary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.basePrice}>
-            Precio base: ${producto.precio.toFixed(2)}
-          </Text>
-
-          <View style={styles.divider} />
-
-          <ScrollView style={styles.content}>
-            {producto.modificadores?.map((grupo) => (
-              <View key={grupo.id} style={styles.groupContainer}>
-                <Text style={styles.groupTitle}>
-                  {grupo.titulo}
-                  {grupo.max > 1 && (
-                    <Text style={styles.groupSubtitle}> (Elige varios)</Text>
-                  )}
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.headerText}>
+              <Text style={styles.title}>{producto.nombre}</Text>
+              <Text style={styles.basePrice}>
+                Precio base:{" "}
+                <Text style={styles.priceValue}>
+                  ${producto.precio.toFixed(2)}
                 </Text>
+              </Text>
+            </View>
 
-                {grupo.opciones.map((opcion) => {
+            <Text style={styles.description}>{producto.descripcion}</Text>
+
+            {/* SECCIÓN: Complementos */}
+            {producto.complementos && producto.complementos.length > 0 && (
+              <View style={styles.groupContainer}>
+                <Text style={styles.groupTitle}>
+                  Complementos{" "}
+                  <Text style={styles.groupSubtitle}>(Opcional)</Text>
+                </Text>
+                {producto.complementos.map((item) => {
                   const isSelected = selectedOptions.some(
-                    (o) => o.id === opcion.id
+                    (o) => o.id === item.id && o.tipo === "complemento"
                   );
                   return (
                     <TouchableOpacity
-                      key={opcion.id}
+                      key={`comp-${item.id}`}
                       style={[
                         styles.optionRow,
                         isSelected && styles.optionSelected,
                       ]}
-                      onPress={() => toggleOption(opcion, grupo)}
+                      onPress={() => toggleOption(item, "complemento")}
+                      activeOpacity={0.7}
                     >
-                      <View
-                        style={{ flexDirection: "row", alignItems: "center" }}
-                      >
+                      <View style={styles.optionLeft}>
                         <Ionicons
-                          name={
-                            isSelected
-                              ? grupo.max === 1
-                                ? "radio-button-on"
-                                : "checkbox"
-                              : grupo.max === 1
-                              ? "radio-button-off"
-                              : "square-outline"
+                          name={isSelected ? "checkbox" : "square-outline"}
+                          size={22}
+                          color={
+                            isSelected ? COLORS.primary : COLORS.text.muted
                           }
-                          size={24}
-                          color={isSelected ? "#FA9623" : "#CCC"}
                         />
                         <Text
                           style={[
@@ -158,95 +193,238 @@ export default function ProductDetailsModal({
                             isSelected && styles.optionTextSelected,
                           ]}
                         >
-                          {opcion.nombre}
+                          {item.nombre}
                         </Text>
                       </View>
-                      {opcion.precio > 0 && (
-                        <Text style={styles.optionPrice}>
-                          +${opcion.precio}
-                        </Text>
-                      )}
+                      <Text style={styles.optionPrice}>
+                        +${item.precio.toFixed(2)}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            ))}
+            )}
+
+            {/* SECCIÓN: Ingredientes Opcionales (Sin Costo Extra) */}
+            {producto.ingredientesOpcionales &&
+              producto.ingredientesOpcionales.length > 0 && (
+                <View style={styles.groupContainer}>
+                  <Text style={styles.groupTitle}>
+                    Personalizar{" "}
+                    <Text style={styles.groupSubtitle}>(Sin costo)</Text>
+                  </Text>
+                  <View style={styles.chipsContainer}>
+                    {producto.ingredientesOpcionales.map((item) => {
+                      const isSelected = selectedOptions.some(
+                        (o) => o.id === item.id && o.tipo === "ingrediente"
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={`ing-${item.id}`}
+                          style={[
+                            styles.chip,
+                            isSelected && styles.chipSelected,
+                          ]}
+                          onPress={() => toggleOption(item, "ingrediente")}
+                        >
+                          {isSelected && (
+                            <Ionicons
+                              name="checkmark"
+                              size={16}
+                              color={COLORS.white}
+                              style={{ marginRight: 4 }}
+                            />
+                          )}
+                          <Text
+                            style={[
+                              styles.chipText,
+                              isSelected && styles.chipTextSelected,
+                            ]}
+                          >
+                            {item.nombre}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+            {/* Campo de Notas para Cocina */}
+            <View style={styles.groupContainer}>
+              <Text style={styles.groupTitle}>Notas para cocina</Text>
+              <TextInput
+                style={styles.noteInput}
+                placeholder="Ej. Sin cebolla, salsa aparte..."
+                placeholderTextColor={COLORS.text.muted}
+                value={nota}
+                onChangeText={setNota}
+                multiline
+                maxLength={100}
+              />
+            </View>
           </ScrollView>
 
-          {/* Footer con Botón Agregar */}
+          {/* Footer con color #FF8108 */}
           <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.addBtn}
+              style={[styles.addBtn, { backgroundColor: COLORS.primary }]}
               onPress={() =>
                 onAddToCart(producto, selectedOptions, precioFinal, nota)
               }
+              activeOpacity={0.9}
             >
-              <Text style={styles.addBtnText}>
-                Agregar • ${precioFinal.toFixed(2)}
-              </Text>
+              <Text style={styles.addBtnText}>Agregar al pedido</Text>
+              <View style={styles.priceBadge}>
+                <Text style={styles.priceBadgeText}>
+                  ${precioFinal.toFixed(2)}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
+  absolute: { position: "absolute", top: 0, left: 0, bottom: 0, right: 0 },
+  overlay: { flex: 1 },
+  keyboardView: { flex: 1, justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    height: "70%",
-    padding: 20,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    height: "85%",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
   },
-  header: {
+  imageContainer: { height: 200, position: "relative" },
+  productImage: { width: "100%", height: "100%", resizeMode: "cover" },
+  closeBtn: {
+    position: "absolute",
+    top: SPACING.m,
+    right: SPACING.m,
+    backgroundColor: "rgba(255,255,255,0.8)",
+    borderRadius: 20,
+    padding: 6,
+  },
+  content: { flex: 1, padding: SPACING.l },
+  headerText: { marginBottom: SPACING.s },
+  title: { fontSize: 24, fontWeight: "800", color: COLORS.text.primary },
+  basePrice: { fontSize: 14, color: COLORS.text.secondary, marginTop: 4 },
+  priceValue: { fontWeight: "700", color: COLORS.text.primary },
+  description: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    lineHeight: 20,
+    marginBottom: SPACING.l,
+  },
+  groupTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text.primary,
+    marginBottom: SPACING.m,
+  },
+  groupSubtitle: {
+    fontSize: 14,
+    fontWeight: "normal",
+    color: COLORS.text.muted,
+  },
+
+  chipsContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  chipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipText: { fontSize: 14, color: COLORS.text.secondary, fontWeight: "600" },
+  chipTextSelected: { color: COLORS.white },
+  noteInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: SPACING.m,
+    fontSize: 15,
+    color: COLORS.text.primary,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  footer: {
+    padding: SPACING.l,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    backgroundColor: COLORS.white,
+  },
+  addBtn: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
+    paddingVertical: 16,
+    paddingHorizontal: SPACING.l,
+    borderRadius: 16,
   },
-  title: { fontSize: 22, fontWeight: "bold", color: "#333" },
-  closeBtn: { padding: 5, backgroundColor: "#F5F5F5", borderRadius: 20 },
-  basePrice: { fontSize: 14, color: "#888" },
-  divider: { height: 1, backgroundColor: "#EEE", marginVertical: 15 },
-  content: { flex: 1 },
-  groupContainer: { marginBottom: 25 },
-  groupTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
+  addBtnText: { color: COLORS.white, fontSize: 18, fontWeight: "800" },
+  priceBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
-  groupSubtitle: { fontSize: 12, fontWeight: "normal", color: "#999" },
+  priceBadgeText: { color: COLORS.white, fontWeight: "800", fontSize: 16 },
+
+  groupContainer: {
+    marginBottom: SPACING.xl,
+    paddingHorizontal: 4,
+  },
   optionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F9F9F9",
-  },
-  optionSelected: { backgroundColor: "#FFF8E1" }, // Fondo amarillito suave al seleccionar
-  optionText: { marginLeft: 10, fontSize: 16, color: "#555" },
-  optionTextSelected: { fontWeight: "bold", color: "#333" },
-  optionPrice: { fontSize: 14, color: "#FA9623", fontWeight: "600" },
-  footer: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#EEE",
-  },
-  addBtn: {
-    backgroundColor: "#FA9623",
-    paddingVertical: 15,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.m,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
-    alignItems: "center",
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
-  addBtnText: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
+  optionSelected: {
+    backgroundColor: `${COLORS.primary}05`,
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+  },
+  optionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  optionText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: COLORS.text.primary,
+    fontWeight: "500",
+  },
+  optionTextSelected: {
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  optionPrice: {
+    fontSize: 15,
+    color: COLORS.text.secondary,
+    fontWeight: "600",
+  },
 });

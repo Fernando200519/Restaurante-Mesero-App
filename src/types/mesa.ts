@@ -1,5 +1,3 @@
-// src/types/mesa.ts
-
 export type MesaEstado = "disponible" | "ocupada" | "esperando" | "agrupada";
 
 export interface MeseroUI {
@@ -9,27 +7,29 @@ export interface MeseroUI {
 }
 
 export interface Mesa {
-  id: string;
+  id: number;
   nombre: string;
-  ocupantes: number;
-  estado: MesaEstado;
-  zona?: string;
-  alerta?: boolean;
-  mesero?: MeseroUI | null;
-  orderId?: number;
-  fechaInicio?: string | null;
+  estado: string;
+  zona: string;
+  comensales: number;
+  ordenId: number | null;
+  meseroId: number | null;
+  nombreMesero?: string;
+  fotoPerfilMesero?: string;
+  meseroDisponible?: boolean;
+  fechaHoraInicioOcupacion?: string;
 }
 
 export interface MesaBackend {
   id: number;
-  zona: string;
+  zona: string | null;
   estado: string;
-  // capacidad: number;
+  meseroId: number | null;
+  nombreMesero: string | null;
   comensales: number | null;
-  fotoPerfilMesero?: string | null;
-  meseroDisponible?: boolean;
-  nombreMesero?: string | null;
-  orderId?: number | null; // Por si acaso
-  ordenId?: number | null; // El que viene en tu JSON real
-  fechaHoraInicioOcupacion?: string | null;
+  fotoPerfilMesero: string | null;
+  meseroDisponible: boolean | null;
+  ordenId: number | null;
+  orderId?: number | null;
+  fechaHoraInicioOcupacion: string | null;
 }
