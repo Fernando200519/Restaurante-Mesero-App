@@ -5,16 +5,16 @@ const API_URL = "http://137.184.191.81";
 const adaptarMesa = (backendMesa: MesaBackend): Mesa => {
   let estadoUI: Mesa["estado"] = "disponible";
 
-  // Normalizamos el string del backend
   const estadoBack = backendMesa.estado?.toUpperCase() || "LIBRE";
 
   if (estadoBack === "OCUPADA") {
     estadoUI = "ocupada";
   } else if (estadoBack === "ESPERANDO" || estadoBack === "PENDIENTE DE PAGO") {
-    // ✅ Ahora capturamos el nuevo estado del backend
     estadoUI = "esperando";
   } else if (estadoBack === "AGRUPADA") {
     estadoUI = "agrupada";
+  } else if (estadoBack === "POR LIBERAR") {
+    estadoUI = "liberar";
   }
 
   return {
@@ -170,34 +170,6 @@ export const mesasApi = {
       return [];
     }
   },
-  getZonasActivas: async (token: string): Promise<string[]> => {
-    try {
-      const response = await fetch(`${API_URL}/zones`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) return [];
-
-      const data = await response.json();
-
-      return data
-        .filter((z: any) => {
-          return (
-            z.estado === "Activa" &&
-            z.nombre !== "Sin zona" &&
-            z.nombre !== "Sin Zona"
-          );
-        })
-        .map((z: any) => z.nombre);
-    } catch (error) {
-      console.error("Error cargando zonas:", error);
-      return [];
-    }
-  },
 
   getMesaById: async (mesaId: number, token: string): Promise<Mesa> => {
     const response = await fetch(`${API_URL}/tables/${mesaId}`, {
@@ -263,6 +235,49 @@ export const mesasApi = {
       console.log("✅ Checkout exitoso.");
     } catch (error: any) {
       console.error("🔴 Error en finalizarPedido:", error.message);
+      throw error;
+    }
+  },
+
+  getZonasActivas: async (token: string): Promise<any[]> => {
+    try {
+      const response = await fetch(`${API_URL}/zones`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.filter((z: any) => z.estado === "Activa");
+    } catch (error) {
+      console.error("Error cargando zonas:", error);
+      return [];
+    }
+  },
+
+  liberarMesa: async (
+    mesaId: number,
+    zonaId: number,
+    token: string
+  ): Promise<void> => {
+    const url = `${API_URL}/tables/${mesaId}`;
+    try {
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zonaId: Number(zonaId),
+          estadoMesa: "Libre",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Error ${response.status}`);
+      }
+    } catch (error: any) {
+      console.error("🔴 Error en liberarMesa:", error.message);
       throw error;
     }
   },

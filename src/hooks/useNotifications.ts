@@ -26,7 +26,7 @@ export function useNotifications() {
       setNotifications(data);
       setUnreadCount(currentUnread);
     } catch (error) {
-      console.error(error);
+      console.log(error);
     }
   }, [token]);
 

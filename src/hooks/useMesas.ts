@@ -35,9 +35,32 @@ export const useMesas = () => {
     [token]
   );
 
+  const liberarMesaAction = async (mesaId: number, zonaNombre: string) => {
+    if (!token) return;
+    try {
+      const zonas = await mesasApi.getZonasActivas(token);
+      const zonaEncontrada = zonas.find((z) => z.nombre === zonaNombre);
+
+      const zonaId = zonaEncontrada ? zonaEncontrada.id : 1;
+
+      await mesasApi.liberarMesa(mesaId, zonaId, token);
+
+      await fetchMesas(true);
+    } catch (err) {
+      console.error("Error al liberar mesa:", err);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     fetchMesas().catch(() => {});
   }, [fetchMesas]);
 
-  return { mesas, loading, error, refresh: fetchMesas };
+  return {
+    mesas,
+    loading,
+    error,
+    refresh: fetchMesas,
+    liberarMesa: liberarMesaAction,
+  };
 };

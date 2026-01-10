@@ -11,6 +11,7 @@ import {
   Dimensions,
   Image,
   ScrollView,
+  Alert,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,7 @@ import { Mesa } from "../types/mesa";
 import { mesasApi } from "../api/mesasApi";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SPACING } from "../constants/theme";
+import { useMesas } from "../hooks/useMesas";
 
 interface Props {
   visible: boolean;
@@ -42,11 +44,49 @@ export default function TableDetailsModal({
     transcurrido: string;
   } | null>(null);
 
+  const { liberarMesa } = useMesas();
+  const [isLiberating, setIsLiberating] = useState(false);
+
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const isMyTable = mesa?.meseroId === user?.id;
   const nombreMesero = mesa?.nombreMesero || "Sin asignar";
   const totalMesa = items.reduce((acc, item) => acc + (item.total || 0), 0);
+
+  const parseBackendDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    try {
+      const normalized = dateStr.replace(/\+\d{2}:\d{2}$/, "Z");
+      const d = new Date(normalized);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const calcularRelativo = (fechaInicio: Date) => {
+    const ahora = new Date();
+    const diff = Math.max(0, ahora.getTime() - fechaInicio.getTime());
+    const minTotal = Math.floor(diff / 60000);
+
+    if (minTotal < 60) return `${minTotal} min`;
+    const horas = Math.floor(minTotal / 60);
+    const mins = minTotal % 60;
+    return `${horas}h ${mins}m`;
+  };
+
+  const handleLiberar = async () => {
+    if (!mesa) return;
+    setIsLiberating(true);
+    try {
+      await liberarMesa(mesa.id, mesa.zona);
+      onClose();
+    } catch (error) {
+      Alert.alert("Error", "No se pudo liberar la mesa.");
+    } finally {
+      setIsLiberating(false);
+    }
+  };
 
   useEffect(() => {
     if (visible && mesa) {
@@ -58,50 +98,45 @@ export default function TableDetailsModal({
       }).start();
 
       if (mesa.fechaHoraInicioOcupacion) {
-        const fecha = mesa.fechaHoraInicioOcupacion.endsWith("Z")
-          ? mesa.fechaHoraInicioOcupacion
-          : mesa.fechaHoraInicioOcupacion + "Z";
-        const inicio = new Date(fecha);
-        setTiempoInfo({
-          inicio: inicio.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          transcurrido: calcularRelativo(fecha),
-        });
+        const inicio = parseBackendDate(mesa.fechaHoraInicioOcupacion);
+
+        if (inicio) {
+          setTiempoInfo({
+            inicio: inicio.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }),
+            transcurrido: calcularRelativo(inicio),
+          });
+        }
       }
 
       if (mesa.ordenId && token) {
         setLoading(true);
         mesasApi
           .getDetalleOrden(mesa.ordenId, token)
-          .then((response: any) => {
-            setItems(response || []);
-          })
+          .then((response) => setItems(response || []))
           .catch(() => console.log("Error al cargar detalles"))
           .finally(() => setLoading(false));
-      } else {
-        setItems([]);
       }
     } else {
       slideAnim.setValue(SCREEN_HEIGHT);
+      setItems([]);
+      setTiempoInfo(null);
     }
   }, [visible, mesa, token]);
 
-  const calcularRelativo = (fecha: string) => {
-    const diff = Math.max(0, new Date().getTime() - new Date(fecha).getTime());
-    const min = Math.floor(diff / 60000);
-    return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
-  };
+  // Dentro de TableDetailsModal.tsx
+  const isPorLiberar = mesa?.estado === "liberar";
 
   if (!mesa) return null;
 
-  // ✅ Función robusta para normalizar (Quita espacios y acentos)
   const normalizeStatus = (estado: string) => {
     return (estado || "")
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Quita acentos (ó -> o)
-      .replace(/\s+/g, "") // Quita espacios
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "")
       .toUpperCase();
   };
 
@@ -109,15 +144,15 @@ export default function TableDetailsModal({
     const s = normalizeStatus(estado);
     switch (s) {
       case "SOLICITADO":
-        return "#3B82F6"; // Azul
+        return "#3B82F6";
       case "ENPREPARACION":
-        return "#FA9623"; // Naranja
+        return "#FA9623";
       case "LISTOPARAENTREGAR":
-        return "#10B981"; // Verde
+        return "#10B981";
       case "ENTREGADO":
-        return "#374151"; // Gris/Negro
+        return "#374151";
       case "CANCELADO":
-        return "#EF4444"; // Rojo
+        return "#EF4444";
       default:
         return COLORS.text.muted;
     }
@@ -265,15 +300,35 @@ export default function TableDetailsModal({
           <TouchableOpacity
             style={[
               styles.actionBtn,
-              { backgroundColor: isMyTable ? COLORS.primary : "#6B7280" },
+              {
+                backgroundColor: isPorLiberar
+                  ? "#3B82F6"
+                  : isMyTable
+                  ? COLORS.primary
+                  : "#6B7280",
+              },
             ]}
-            onPress={onManageOrder}
-            activeOpacity={0.8}
+            onPress={isPorLiberar ? handleLiberar : onManageOrder}
+            disabled={isLiberating}
           >
-            <Text style={styles.actionBtnText}>
-              {isMyTable ? "Gestionar Pedido" : "Ver Detalle de Orden"}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+            {isLiberating ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <>
+                <Text style={styles.actionBtnText}>
+                  {isPorLiberar
+                    ? "Limpiar y Liberar Mesa"
+                    : isMyTable
+                    ? "Gestionar Pedido"
+                    : "Ver Detalle"}
+                </Text>
+                <Ionicons
+                  name={isPorLiberar ? "brush-outline" : "chevron-forward"}
+                  size={20}
+                  color={COLORS.white}
+                />
+              </>
+            )}
           </TouchableOpacity>
         </Animated.View>
       </View>

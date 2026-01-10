@@ -31,6 +31,12 @@ const STATUS_CONFIG = {
     borderColor: "#EDE9FE",
     label: "Unida",
   },
+  liberar: {
+    color: "#3B82F6",
+    bgColors: ["#EFF6FF", "#FFFFFF"] as [string, string],
+    borderColor: "#DBEAFE",
+    label: "Por Liberar",
+  },
 };
 
 interface MesaCardProps {
@@ -50,7 +56,11 @@ export default function MesaCard({
     STATUS_CONFIG[mesa.estado as keyof typeof STATUS_CONFIG] ||
     STATUS_CONFIG.disponible;
 
-  const isOccupied = mesa.estado === "ocupada" || mesa.estado === "esperando";
+  const isOccupied =
+    mesa.estado === "ocupada" ||
+    mesa.estado === "esperando" ||
+    mesa.estado === "liberar";
+
   const isMyTable = isOccupied && mesa.meseroId === currentUserId;
 
   const initials = useMemo(() => {

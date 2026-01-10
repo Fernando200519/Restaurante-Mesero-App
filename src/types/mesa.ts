@@ -1,4 +1,9 @@
-export type MesaEstado = "disponible" | "ocupada" | "esperando" | "agrupada";
+export type MesaEstado =
+  | "disponible"
+  | "ocupada"
+  | "esperando"
+  | "agrupada"
+  | "liberar";
 
 export interface MeseroUI {
   nombre: string;

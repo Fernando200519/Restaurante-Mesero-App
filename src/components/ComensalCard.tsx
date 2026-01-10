@@ -11,7 +11,7 @@ interface Props {
   onDelete: () => void;
   onAddProducts: () => void;
   onDeliverProduct: (detalleId: number) => void;
-  onCancelProduct: (detalleId: number, estadoActual: string) => void; // ✅ Nueva Prop
+  onCancelProduct: (detalleId: number, estadoActual: string) => void;
 }
 
 const getStatusConfig = (estado: string) => {
@@ -90,7 +90,6 @@ export const ComensalCard = ({
         ) : (
           item.items.map((prod, i) => {
             const status = getStatusConfig(prod.estado);
-            // ✅ NORMALIZACIÓN: Detectamos si está listo para entregar
             const sClean = (prod.estado || "")
               .normalize("NFD")
               .replace(/[\u0300-\u036f]/g, "")
