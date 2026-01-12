@@ -36,7 +36,7 @@ export interface Categoria {
 export interface CartItem {
   producto: Producto;
   cantidad: number;
-  opciones: any[];
-  notas: string;
-  precioFinal: number;
+  opcionesSeleccionadas: any[]; // Antes: opciones
+  comentario: string; // Antes: notas
+  precioUnitario: number; // Antes: precioFinal
 }

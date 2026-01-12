@@ -23,6 +23,7 @@ import { ComensalCard } from "../components/ComensalCard";
 import { EditComensalModal } from "../components/EditComensalModal";
 import { UpdateDinersModal } from "../components/UpdateDinersModal";
 import { ConfirmActionModal } from "../components/ConfirmActionModal";
+import { OrderSettlementModal } from "../components/OrderSettlementModal";
 
 import { COLORS, SPACING } from "../constants/theme";
 
@@ -56,7 +57,10 @@ const ComandaScreen = () => {
     renombrarComensal,
     entregarProducto,
     cancelarProducto,
-    solicitarCuenta,
+    ejecutarPago,
+    prepararLiquidacion,
+    fullOrderData,
+    isPreparingSettlement,
   } = useComensales(orderId, token);
 
   const isUserInteracting = useMemo(() => {
@@ -64,6 +68,9 @@ const ComandaScreen = () => {
       modalVisible || modalDinersVisible || !!cancelInfo || !!productToDeliver
     );
   }, [modalVisible, modalDinersVisible, cancelInfo, productToDeliver]);
+
+  const [isPaymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -106,11 +113,17 @@ const ComandaScreen = () => {
     setCancelInfo({ id, mensaje: mensajeAviso });
   };
 
-  const handleFinalizar = () => {
-    solicitarCuenta(() => {
-      Alert.alert("Cuenta Solicitada", "La mesa ha pasado a estado de pago.");
-      navigation.navigate("Mesas");
-    });
+  const totalCuenta = useMemo(() => {
+    return comensales.reduce((acc, comensal) => acc + comensal.total, 0);
+  }, [comensales]);
+
+  const handleFinalizar = async () => {
+    // El hook hace todo el trabajo sucio
+    const success = await prepararLiquidacion();
+
+    if (success) {
+      setPaymentModalVisible(true);
+    }
   };
 
   const handleCancelConfirm = () => {
@@ -119,6 +132,22 @@ const ComandaScreen = () => {
       setCancelInfo(null);
     }
   };
+
+  const handlePaymentConfirm = async (datosPago: any) => {
+    setIsProcessingPayment(true);
+    try {
+      await ejecutarPago(datosPago, () => {
+        setPaymentModalVisible(false);
+        Alert.alert("Éxito", "Pago registrado y mesa lista para ser liberada.");
+        navigation.navigate("Mesas");
+      });
+    } catch (error) {
+      Alert.alert("Error", "No se pudo procesar el pago.");
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
   const headerPaddingTop = Platform.OS === "android" ? insets.top : 0;
 
   useLayoutEffect(() => {
@@ -289,7 +318,6 @@ const ComandaScreen = () => {
         onClose={() => setModalDinersVisible(false)}
       />
 
-      {/* ✅ Modal Dinámico para Cancelación */}
       <ConfirmActionModal
         visible={!!cancelInfo}
         title="¿Cancelar producto?"
@@ -301,7 +329,6 @@ const ComandaScreen = () => {
         onCancel={() => setCancelInfo(null)}
       />
 
-      {/* ✅ MODAL DE ENTREGA (No lo vi en tu código, es importante agregarlo) */}
       <ConfirmActionModal
         visible={!!productToDeliver}
         title="¿Producto entregado?"
@@ -311,6 +338,13 @@ const ComandaScreen = () => {
         icon="checkmark-done-circle"
         onConfirm={handleDeliverConfirm}
         onCancel={() => setProductToDeliver(null)}
+      />
+      <OrderSettlementModal
+        visible={isPaymentModalVisible}
+        orderData={fullOrderData}
+        onClose={() => setPaymentModalVisible(false)}
+        onConfirm={handlePaymentConfirm}
+        isLoading={isPreparingSettlement}
       />
     </View>
   );

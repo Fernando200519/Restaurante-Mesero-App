@@ -115,8 +115,16 @@ export const mesasApi = {
       orderDetailDTOs: items.map((item) => ({
         productoId: item.producto.id,
         cantidad: item.cantidad,
-        complementosIds: [],
-        exclusionProductoIds: [],
+        complementosIds: item.opcionesSeleccionadas
+          ? item.opcionesSeleccionadas
+              .filter((o: any) => o.tipo === "complemento")
+              .map((o: any) => o.id)
+          : [],
+        exclusionProductoIds: item.opcionesSeleccionadas
+          ? item.opcionesSeleccionadas
+              .filter((o: any) => o.tipo === "ingrediente")
+              .map((o: any) => o.id)
+          : [],
         comentario: item.comentario || "",
       })),
     };
@@ -170,6 +178,17 @@ export const mesasApi = {
       return [];
     }
   },
+  getOrdenCompleta: async (orderId: number, token: string): Promise<any> => {
+    const response = await fetch(`${API_URL}/orders/${orderId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error("Error al obtener la orden");
+    return await response.json();
+  },
 
   getMesaById: async (mesaId: number, token: string): Promise<Mesa> => {
     const response = await fetch(`${API_URL}/tables/${mesaId}`, {
@@ -209,32 +228,6 @@ export const mesasApi = {
       console.log("✅ Estado actualizado correctamente en el servidor");
     } catch (error: any) {
       console.error("🔴 Error en actualizarEstadoProducto:", error.message);
-      throw error;
-    }
-  },
-
-  finalizarPedido: async (orderId: number, token: string): Promise<void> => {
-    const url = `${API_URL}/orders/${orderId}/checkout`;
-
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "Content-Length": "0",
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("🔴 ERROR 500 - DETALLE:", errorText);
-        throw new Error(errorText || `Error ${response.status}`);
-      }
-
-      console.log("✅ Checkout exitoso.");
-    } catch (error: any) {
-      console.error("🔴 Error en finalizarPedido:", error.message);
       throw error;
     }
   },
@@ -279,6 +272,37 @@ export const mesasApi = {
     } catch (error: any) {
       console.error("🔴 Error en liberarMesa:", error.message);
       throw error;
+    }
+  },
+  finalizarPedido: async (orderId: number, token: string): Promise<void> => {
+    const url = `${API_URL}/orders/${orderId}/checkout`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Error al cerrar la orden");
+  },
+
+  registrarPago: async (
+    orderId: number,
+    token: string,
+    payload: any
+  ): Promise<void> => {
+    const url = `${API_URL}/orders/${orderId}/payments`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("🔴 Error en Pago Backend:", errorText);
+      throw new Error(errorText || "Error al procesar el pago");
     }
   },
 };

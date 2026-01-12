@@ -40,7 +40,12 @@ export default function MesasScreen({ navigation }: any) {
   const fetchZonas = async () => {
     if (token) {
       try {
-        const nombres = await mesasApi.getZonasActivas(token);
+        const data = await mesasApi.getZonasActivas(token);
+
+        const nombres = data
+          .filter((z: any) => z.nombre.toLowerCase() !== "sin zona")
+          .map((z: any) => z.nombre);
+
         setZonasPermitidas(nombres);
       } catch (error) {
         console.log("Error al cargar zonas");
@@ -110,14 +115,10 @@ export default function MesasScreen({ navigation }: any) {
   const mesasFiltradas = useMemo(() => {
     return mesas
       .filter((m) => {
-        // 1. Lógica para la zona virtual "Mis Mesas"
         if (zonaActual === "Mis Mesas") {
-          // Filtramos mesas donde el meseroId coincida con el ID del usuario actual
-          // Consideramos tanto "ocupada" como "esperando" (pendiente de pago)
           return m.meseroId === user?.id && m.estado !== "disponible";
         }
 
-        // 2. Lógica estándar para el resto de zonas
         const zonaDeMesa = m.zona || "General";
         const matchZona = zonaActual === "Todas" || zonaDeMesa === zonaActual;
         const matchTexto = m.nombre
@@ -127,7 +128,7 @@ export default function MesasScreen({ navigation }: any) {
         return matchZona && matchTexto;
       })
       .sort((a, b) => a.id - b.id);
-  }, [mesas, zonaActual, busqueda, user?.id]); // ✅ Añadimos user?.id como dependencia
+  }, [mesas, zonaActual, busqueda, user?.id]);
 
   const handleConfirmOpen = async (mesaId: number, comensales: number) => {
     if (!token) {
@@ -198,9 +199,10 @@ export default function MesasScreen({ navigation }: any) {
           data={zonas}
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(z) => z}
+          keyExtractor={(item, index) =>
+            typeof item === "string" ? item : `zone-${index}`
+          }
           contentContainerStyle={styles.zonasScroll}
-          // En el renderItem de la lista de zonas
           renderItem={({ item }) => {
             const active = zonaActual === item;
             const isPersonalZone = item === "Mis Mesas";
@@ -261,9 +263,11 @@ export default function MesasScreen({ navigation }: any) {
               mesa={item}
               onPress={(m) => {
                 setSelectedMesa(m);
-                m.estado.toLowerCase() === "ocupada"
-                  ? setDetailsModalVisible(true)
-                  : setOpeningModalVisible(true);
+                if (m.estado !== "disponible") {
+                  setDetailsModalVisible(true);
+                } else {
+                  setOpeningModalVisible(true);
+                }
               }}
               showZona={zonaActual === "Todas"}
               currentUserId={user?.id}
@@ -335,7 +339,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    marginHorizontal: SPACING.l,
+    marginHorizontal: SPACING.m,
     paddingHorizontal: SPACING.m,
     height: 48,
     marginBottom: SPACING.s,

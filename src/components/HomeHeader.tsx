@@ -230,10 +230,11 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
               <View style={styles.menuHeaderTop}>
                 <View style={styles.avatarWrapper}>
                   <Avatar
-                    nombre={user?.nombre || ""}
+                    nombre={user?.nombre || "Sin Nombre"}
                     avatarUrl={localImage || user?.avatarUrl}
                     size={70}
                     showBadge={false}
+                    inverted={true}
                   />
                   <TouchableOpacity
                     style={styles.cameraBadge}
@@ -249,6 +250,7 @@ export default function HomeHeader({ navigation }: { navigation: any }) {
                   <Ionicons name="close" size={24} color={COLORS.white} />
                 </TouchableOpacity>
               </View>
+
               <Text style={styles.menuName}>
                 {user?.nombre} {user?.apellidoPaterno}
               </Text>

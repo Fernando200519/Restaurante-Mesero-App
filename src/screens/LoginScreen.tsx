@@ -63,6 +63,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.container}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
           <View style={styles.innerContainer}>
             {/* ✅ Cabecera actualizada con Logo */}
@@ -167,13 +168,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   logoImage: {
-    width: "70%", // ✅ Ajusta el tamaño del dibujo dentro del cuadro
+    width: "70%",
     height: "70%",
-    tintColor: "#FFFFFF", // ✅ Opcional: fuerza a que el dibujo sea blanco puro si es un icono
+    tintColor: "#FFFFFF",
   },
   title: {
     fontSize: 32,
-    fontWeight: "800", // ✅ Más peso visual
+    fontWeight: "800",
     color: COLORS.text.primary,
     letterSpacing: -1,
   },

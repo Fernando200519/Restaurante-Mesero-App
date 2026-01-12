@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -33,14 +32,16 @@ export default function ResumenPedidoScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(false);
 
   const total = localCart.reduce(
-    (acc: number, item: any) => acc + item.producto.precio * item.cantidad,
+    (acc: number, item: any) =>
+      acc + (item.precioUnitario || 0) * item.cantidad,
     0
   );
 
-  const updateQty = (id: number, delta: number) => {
+  // ✅ PASO 2: Actualizar cantidad usando el cartItemId único
+  const updateQty = (cartItemId: string, delta: number) => {
     setLocalCart((prev: any[]) =>
       prev.map((item) => {
-        if (item.producto.id === id) {
+        if (item.cartItemId === cartItemId) {
           const newQty = Math.max(1, item.cantidad + delta);
           return { ...item, cantidad: newQty };
         }
@@ -49,7 +50,8 @@ export default function ResumenPedidoScreen({ navigation, route }: any) {
     );
   };
 
-  const handleDelete = (id: number) => {
+  // ✅ PASO 3: Eliminar usando el cartItemId único
+  const handleDelete = (cartItemId: string) => {
     Alert.alert("Eliminar", "¿Quitar este producto del pedido?", [
       { text: "Cancelar", style: "cancel" },
       {
@@ -57,7 +59,7 @@ export default function ResumenPedidoScreen({ navigation, route }: any) {
         style: "destructive",
         onPress: () =>
           setLocalCart((prev: any[]) =>
-            prev.filter((i) => i.producto.id !== id)
+            prev.filter((i) => i.cartItemId !== cartItemId)
           ),
       },
     ]);
@@ -90,46 +92,100 @@ export default function ResumenPedidoScreen({ navigation, route }: any) {
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <View style={styles.card}>
-      <Image source={{ uri: item.producto.imagen }} style={styles.image} />
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.prodName} numberOfLines={1}>
-            {item.producto.nombre}
-          </Text>
-          <TouchableOpacity onPress={() => handleDelete(item.producto.id)}>
-            <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-          </TouchableOpacity>
-        </View>
+  const renderItem = ({ item }: { item: any }) => {
+    const unitPrice = item.precioUnitario || 0;
 
-        <Text style={styles.priceUnit}>
-          ${item.producto.precio.toFixed(2)} c/u
-        </Text>
+    const complementos = item.opcionesSeleccionadas?.filter(
+      (o: any) => o.tipo === "complemento"
+    );
+    const personalizaciones = item.opcionesSeleccionadas?.filter(
+      (o: any) => o.tipo === "ingrediente"
+    );
 
-        <View style={styles.cardFooter}>
-          <View style={styles.qtySelector}>
-            <TouchableOpacity
-              onPress={() => updateQty(item.producto.id, -1)}
-              style={styles.qtyBtn}
-            >
-              <Ionicons name="remove" size={16} color={COLORS.text.primary} />
-            </TouchableOpacity>
-            <Text style={styles.qtyValue}>{item.cantidad}</Text>
-            <TouchableOpacity
-              onPress={() => updateQty(item.producto.id, 1)}
-              style={styles.qtyBtn}
-            >
-              <Ionicons name="add" size={16} color={COLORS.text.primary} />
+    return (
+      <View style={styles.card}>
+        <Image source={{ uri: item.producto.imagen }} style={styles.image} />
+        <View style={styles.cardContent}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.prodName} numberOfLines={1}>
+              {item.producto.nombre}
+            </Text>
+            {/* ✅ Usamos cartItemId aquí */}
+            <TouchableOpacity onPress={() => handleDelete(item.cartItemId)}>
+              <Ionicons name="trash-outline" size={18} color={COLORS.error} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.itemTotal}>
-            ${(item.producto.precio * item.cantidad).toFixed(2)}
-          </Text>
+
+          {/* ✅ BLOQUE DE EXTRAS (CON COSTO) */}
+          {complementos?.length > 0 && (
+            <View style={styles.optionContainer}>
+              <Ionicons
+                name="add-circle-outline"
+                size={12}
+                color={COLORS.primary}
+              />
+              <Text style={styles.complementosText}>
+                Extras: {complementos.map((o: any) => o.nombre).join(", ")}
+              </Text>
+            </View>
+          )}
+
+          {/* ✅ BLOQUE DE CAMBIOS (SIN COSTO) */}
+          {personalizaciones?.length > 0 && (
+            <View style={styles.optionContainer}>
+              <Ionicons
+                name="remove-circle-outline"
+                size={12}
+                color={COLORS.text.muted}
+              />
+              <Text style={styles.personalizarText}>
+                Cambios:{" "}
+                {personalizaciones.map((o: any) => o.nombre).join(", ")}
+              </Text>
+            </View>
+          )}
+
+          {item.comentario ? (
+            <View style={styles.notaRow}>
+              <Ionicons
+                name="chatbox-ellipses-outline"
+                size={12}
+                color={COLORS.text.muted}
+              />
+              <Text style={styles.notaText}>"{item.comentario}"</Text>
+            </View>
+          ) : null}
+
+          {/* ✅ PRECIO UNITARIO (YA TIENE EXTRAS) */}
+          <Text style={styles.priceUnit}>${unitPrice.toFixed(2)} c/u</Text>
+
+          <View style={styles.cardFooter}>
+            <View style={styles.qtySelector}>
+              {/* BOTÓN MENOS: ✅ Asegúrate que use item.cartItemId */}
+              <TouchableOpacity
+                onPress={() => updateQty(item.cartItemId, -1)}
+                style={styles.qtyBtn}
+              >
+                <Ionicons name="remove" size={16} color={COLORS.text.primary} />
+              </TouchableOpacity>
+
+              <Text style={styles.qtyValue}>{item.cantidad}</Text>
+              <TouchableOpacity
+                onPress={() => updateQty(item.cartItemId, 1)}
+                style={styles.qtyBtn}
+              >
+                <Ionicons name="add" size={16} color={COLORS.text.primary} />
+              </TouchableOpacity>
+            </View>
+            {/* ✅ TOTAL POR LÍNEA (Precio con extras * cantidad) */}
+            <Text style={styles.itemTotal}>
+              ${(unitPrice * item.cantidad).toFixed(2)}
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -151,7 +207,8 @@ export default function ResumenPedidoScreen({ navigation, route }: any) {
 
       <FlatList
         data={localCart}
-        keyExtractor={(item) => item.producto.id.toString()}
+        // ✅ PASO 4: Usar el cartItemId para que React no se confunda
+        keyExtractor={(item) => item.cartItemId}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
@@ -347,4 +404,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   returnBtnText: { color: COLORS.text.secondary, fontWeight: "700" },
+  notaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  notaText: {
+    fontSize: 11,
+    color: COLORS.text.secondary,
+    marginLeft: 4,
+  },
+
+  optionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  complementosText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+  personalizarText: {
+    fontSize: 11,
+    color: COLORS.text.muted,
+    fontStyle: "italic",
+    marginLeft: 4,
+  },
 });

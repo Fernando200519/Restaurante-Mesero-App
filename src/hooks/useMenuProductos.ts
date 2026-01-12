@@ -100,22 +100,23 @@ export function useMenuProductos(navigation: any, route: any) {
   const handleAddToCart = (
     producto: Producto,
     opciones: any[] = [],
-    precioFinal?: number,
+    precioCalculado: number,
     notas: string = ""
   ) => {
     setNotification({ visible: true, message: `¡${producto.nombre} añadido!` });
     setTimeout(() => setNotification({ visible: false, message: "" }), 2000);
 
-    const finalPrice = precioFinal ?? producto.precio;
-
     setCart((prev) => [
       ...prev,
       {
+        cartItemId: `${producto.id}-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 5)}`,
         producto,
         cantidad: 1,
-        opciones,
-        notas,
-        precioFinal: finalPrice,
+        opcionesSeleccionadas: opciones,
+        precioUnitario: precioCalculado,
+        comentario: notas,
       },
     ]);
   };
@@ -164,7 +165,7 @@ export function useMenuProductos(navigation: any, route: any) {
       cart,
       setCart,
       total: cart.reduce(
-        (acc, item) => acc + item.precioFinal * item.cantidad,
+        (acc, item) => acc + item.precioUnitario * item.cantidad,
         0
       ),
     },

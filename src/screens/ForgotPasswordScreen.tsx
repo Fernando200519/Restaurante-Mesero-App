@@ -12,18 +12,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-// Componentes y Tema
 import Input from "../components/Input";
 import Button from "../components/Button";
 import { authApi } from "../api/authApi";
-import { COLORS, SPACING } from "../constants/theme"; // ✅ Sincronizado con tu sistema
+import { COLORS, SPACING } from "../constants/theme";
 
 export default function ForgotPasswordScreen({ navigation }: any) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
-    // Validación de ingeniería básica
     if (!email.trim() || !email.includes("@")) {
       Alert.alert(
         "Formato Inválido",

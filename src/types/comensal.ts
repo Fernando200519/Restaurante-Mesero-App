@@ -1,5 +1,5 @@
 export interface ComensalLocal {
-  id: string | number; // ✅ Aceptamos ambos para evitar conflictos entre local y servidor
+  id: string | number;
   nombre: string;
   total: number;
   itemsCount: number;

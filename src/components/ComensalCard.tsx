@@ -20,30 +20,17 @@ const getStatusConfig = (estado: string) => {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "")
     .toUpperCase();
-
   switch (s) {
     case "SOLICITADO":
       return { color: "#3B82F6", icon: "time-outline", label: "Solicitado" };
     case "ENPREPARACION":
-      return {
-        color: "#FA9623",
-        icon: "restaurant-outline",
-        label: "En cocina",
-      };
+      return { color: "#FA9623", icon: "restaurant-outline", label: "Cocina" };
     case "LISTOPARAENTREGAR":
-      return {
-        color: "#10B981",
-        icon: "checkmark-circle-outline",
-        label: "Listo",
-      };
+      return { color: "#10B981", icon: "flash-outline", label: "¡LISTO!" };
     case "ENTREGADO":
-      return { color: "#374151", icon: "checkbox-outline", label: "Entregado" };
+      return { color: "#6B7280", icon: "checkmark-circle", label: "Entregado" };
     case "CANCELADO":
-      return {
-        color: "#EF4444",
-        icon: "close-circle-outline",
-        label: "Cancelado",
-      };
+      return { color: "#EF4444", icon: "close-circle", label: "Cancelado" };
     default:
       return {
         color: COLORS.text.muted,
@@ -63,6 +50,7 @@ export const ComensalCard = ({
 }: Props) => {
   return (
     <View style={styles.card}>
+      {/* HEADER DEL COMENSAL */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onEdit}
@@ -91,68 +79,113 @@ export const ComensalCard = ({
           item.items.map((prod, i) => {
             const status = getStatusConfig(prod.estado);
             const sClean = (prod.estado || "")
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/\s+/g, "")
-              .toUpperCase();
-
+              .toUpperCase()
+              .replace(/\s+/g, "");
             const isReady = sClean === "LISTOPARAENTREGAR";
+            const isDelivered = sClean === "ENTREGADO";
+            const isCancelled = sClean === "CANCELADO";
+
             return (
-              <View key={prod.id || i} style={styles.productRow}>
+              <View
+                key={prod.id || i}
+                style={[styles.productRow, isCancelled && { opacity: 0.4 }]}
+              >
                 <View style={styles.productMainInfo}>
-                  {/* Botón de entregado (Checkmark) solo si está LISTO */}
-                  {isReady && (
+                  <View style={styles.productNameContainer}>
+                    <View style={styles.qtyBadge}>
+                      <Text style={styles.qtyText}>{prod.cantidad}x</Text>
+                    </View>
+                    <Text style={styles.productText} numberOfLines={1}>
+                      {prod.producto}
+                    </Text>
+                  </View>
+
+                  {isReady ? (
                     <TouchableOpacity
                       style={styles.deliverActionBtn}
                       onPress={() => onDeliverProduct(prod.id)}
+                      activeOpacity={0.8}
                     >
                       <Ionicons
-                        name="checkmark-done-circle"
-                        size={24}
-                        color="#10B981"
+                        name="restaurant"
+                        size={14}
+                        color={COLORS.white}
                       />
+                      <Text style={styles.deliverActionText}>ENTREGAR</Text>
                     </TouchableOpacity>
+                  ) : (
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: `${status.color}10` },
+                      ]}
+                    >
+                      <Ionicons
+                        name={status.icon as any}
+                        size={12}
+                        color={status.color}
+                      />
+                      <Text
+                        style={[styles.statusLabel, { color: status.color }]}
+                      >
+                        {status.label}
+                      </Text>
+                    </View>
                   )}
 
-                  <Text style={styles.productText} numberOfLines={1}>
-                    {prod.producto}
-                  </Text>
-
-                  {/* ✅ BOTÓN DE CANCELACIÓN: Visible si no está ya cancelado */}
-                  {prod.estado !== "Cancelado" && (
+                  {!isCancelled && !isDelivered && (
                     <TouchableOpacity
                       onPress={() => onCancelProduct(prod.id, prod.estado)}
-                      style={styles.cancelBtn}
+                      style={styles.cancelIconButton}
                     >
                       <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color={COLORS.error}
+                        name="close-circle-outline"
+                        size={22}
+                        color="#EF4444"
                       />
                     </TouchableOpacity>
                   )}
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: `${status.color}15` },
-                    ]}
-                  >
-                    <Ionicons
-                      name={status.icon as any}
-                      size={12}
-                      color={status.color}
-                    />
-                    <Text style={[styles.statusLabel, { color: status.color }]}>
-                      {status.label}
-                    </Text>
-                  </View>
                 </View>
 
+                {Boolean(prod.comentario) && (
+                  <View style={styles.noteContainer}>
+                    <Ionicons
+                      name="ribbon-outline"
+                      size={12}
+                      color={COLORS.text.muted}
+                      style={{ marginTop: 2 }}
+                    />
+                    <Text style={styles.noteText}>Nota: {prod.comentario}</Text>
+                  </View>
+                )}
+
+                {/* EXTRAS Y EXCLUSIONES */}
+                <View style={styles.optionsContainer}>
+                  {prod.complementos?.length > 0 && (
+                    <Text style={styles.extraText}>
+                      + {prod.complementos.map((c: any) => c.nombre).join(", ")}
+                    </Text>
+                  )}
+                  {prod.exclusiones?.length > 0 && (
+                    <Text style={styles.exclusionText}>
+                      - {prod.exclusiones.join(", ")}
+                    </Text>
+                  )}
+                </View>
+
+                {/* META DATA: PRECIO Y TIEMPO */}
                 <View style={styles.productMeta}>
                   <Text style={styles.itemPrice}>${prod.total.toFixed(2)}</Text>
-                  <Text style={styles.timeText}>
-                    {calcularHaceCuanto(prod.fechaHoraInicioEstado)}
-                  </Text>
+                  <View style={styles.timeWrapper}>
+                    <Ionicons
+                      name="stopwatch-outline"
+                      size={10}
+                      color={COLORS.text.muted}
+                    />
+                    <Text style={styles.timeText}>
+                      {calcularHaceCuanto(prod.fechaHoraInicioEstado)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             );
@@ -162,7 +195,7 @@ export const ComensalCard = ({
 
       <View style={styles.footer}>
         <View style={styles.totalSummary}>
-          <Text style={styles.totalLabel}>Subtotal comensal:</Text>
+          <Text style={styles.totalLabel}>Subtotal comensal</Text>
           <Text style={styles.totalAmount}>${item.total.toFixed(2)}</Text>
         </View>
 
@@ -171,8 +204,8 @@ export const ComensalCard = ({
           style={styles.addAction}
           activeOpacity={0.8}
         >
-          <Ionicons name="add-circle" size={20} color={COLORS.white} />
-          <Text style={styles.addActionText}>Añadir más</Text>
+          <Ionicons name="add" size={18} color={COLORS.white} />
+          <Text style={styles.addActionText}>Añadir</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -182,16 +215,16 @@ export const ComensalCard = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: SPACING.m,
+    borderRadius: 30,
+    padding: SPACING.l,
     marginBottom: SPACING.m,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "#F5F5F5",
   },
   header: {
     flexDirection: "row",
@@ -200,22 +233,27 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.m,
   },
   nameContainer: { flexDirection: "row", alignItems: "center" },
-  cardName: { fontSize: 20, fontWeight: "800", color: COLORS.text.primary },
+  cardName: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: COLORS.text.primary,
+    letterSpacing: -0.5,
+  },
   editIconCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: `${COLORS.primary}15`,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: `${COLORS.primary}10`,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
   },
   deleteBtn: { padding: 4 },
-  productsList: { marginBottom: SPACING.m },
+  productsList: { marginBottom: SPACING.s },
   productRow: {
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F9FAFB",
+    borderBottomColor: "#F3F4F6",
   },
   productMainInfo: {
     flexDirection: "row",
@@ -223,62 +261,135 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
+  productNameContainer: { flex: 1, flexDirection: "row", alignItems: "center" },
+
+  qtyBadge: {
+    backgroundColor: `${COLORS.primary}10`,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  qtyText: { fontSize: 13, fontWeight: "800", color: COLORS.primary },
   productText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.text.primary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
+
+  deliverActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#10B981",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: "#10B981",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  deliverActionText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: "900",
+    marginLeft: 5,
+  },
+
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
-  statusLabel: { fontSize: 11, fontWeight: "700", marginLeft: 4 },
+  statusLabel: { fontSize: 11, fontWeight: "800", marginLeft: 4 },
+  noteContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F9FAFB",
+    padding: 8,
+    borderRadius: 10,
+    marginTop: 4,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#D1D5DB",
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    marginLeft: 6,
+    fontStyle: "italic",
+    fontWeight: "500",
+  },
+
+  optionsContainer: { paddingLeft: 4, marginBottom: 6 },
+  extraText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  exclusionText: {
+    fontSize: 12,
+    color: COLORS.text.muted,
+    fontStyle: "italic",
+  },
+
   productMeta: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginTop: 4,
   },
-  itemPrice: { fontSize: 13, color: COLORS.text.secondary, fontWeight: "700" },
-  timeText: { fontSize: 11, color: COLORS.text.muted, fontWeight: "500" },
-  emptyState: { paddingVertical: 10, alignItems: "center" },
-  noItemsText: { color: COLORS.text.muted, fontStyle: "italic", fontSize: 13 },
+  itemPrice: { fontSize: 15, color: COLORS.text.primary, fontWeight: "800" },
+  timeWrapper: { flexDirection: "row", alignItems: "center" },
+  timeText: {
+    fontSize: 11,
+    color: COLORS.text.muted,
+    marginLeft: 3,
+    fontWeight: "600",
+  },
+
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: SPACING.s,
+    marginTop: SPACING.m,
     paddingTop: SPACING.m,
     borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
+    borderTopColor: "#F3F4F6",
   },
   totalSummary: { flex: 1 },
-  totalLabel: { fontSize: 11, color: COLORS.text.muted, fontWeight: "600" },
-  totalAmount: { fontSize: 16, fontWeight: "900", color: COLORS.primary },
+  totalLabel: {
+    fontSize: 12,
+    color: COLORS.text.muted,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  totalAmount: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: COLORS.primary,
+    marginTop: 2,
+  },
   addAction: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.primary,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
   },
   addActionText: {
     color: COLORS.white,
     fontWeight: "800",
-    marginLeft: 6,
-    fontSize: 13,
+    marginLeft: 4,
+    fontSize: 14,
   },
-  deliverActionBtn: {
-    marginRight: 8,
-    padding: 2,
-  },
-  cancelBtn: {
-    padding: 6,
-    marginLeft: 8,
-  },
+  cancelIconButton: { marginLeft: 10, padding: 2 },
+  emptyState: { paddingVertical: 20, alignItems: "center" },
+  noItemsText: { color: COLORS.text.muted, fontSize: 14 },
 });

@@ -39,13 +39,21 @@ export default function Input({ icon, secureTextEntry, ...props }: InputProps) {
       />
 
       <TextInput
-        style={styles.input}
         placeholderTextColor={COLORS.text.muted}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         secureTextEntry={secureTextEntry && !isPasswordVisible}
-        selectionColor={COLORS.primary}
         {...props}
+        selectionColor={`${COLORS.primary}80`}
+        cursorColor={COLORS.primary}
+        style={[
+          styles.input,
+          {
+            height: 40,
+            includeFontPadding: false,
+            textAlignVertical: "center",
+          },
+        ]}
       />
 
       {showToggle && (
@@ -77,15 +85,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.m,
     backgroundColor: COLORS.surface,
   },
-  icon: {
-    marginRight: SPACING.s,
-  },
   input: {
     flex: 1,
     fontSize: 16,
     color: COLORS.text.primary,
     fontWeight: "500",
+    paddingVertical: 0,
   },
+  icon: {
+    marginRight: SPACING.s,
+  },
+
   toggle: {
     padding: SPACING.xs,
   },

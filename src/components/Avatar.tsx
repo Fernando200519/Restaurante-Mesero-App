@@ -1,10 +1,7 @@
-// 1. React y Hooks
+// src/components/Avatar.tsx
+
 import React from "react";
-
-// 2. Librerías Externas (UI)
 import { View, Text, Image, StyleSheet } from "react-native";
-
-// 3. Recursos Locales (Arquitectura Limpia)
 import { COLORS } from "../constants/theme";
 
 interface AvatarProps {
@@ -13,6 +10,7 @@ interface AvatarProps {
   avatarUrl?: string | null;
   size?: number;
   showBadge?: boolean;
+  inverted?: boolean; // ✅ Nueva prop para cambiar colores en fondos oscuros
 }
 
 export default function Avatar({
@@ -21,22 +19,31 @@ export default function Avatar({
   avatarUrl,
   size = 40,
   showBadge = true,
+  inverted = false, // Por defecto falso
 }: AvatarProps) {
-  const initials = nombre
-    ? nombre
-        .split(" ")
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "?";
+  // ✅ Lógica de iniciales mejorada (evita errores si el nombre tiene espacios extra)
+  const cleanName = nombre?.trim() || "";
+  const initials =
+    cleanName.length > 0
+      ? cleanName
+          .split(/\s+/)
+          .map((n) => n[0])
+          .filter((n) => !!n)
+          .slice(0, 2)
+          .join("")
+          .toUpperCase()
+      : "?";
 
   const borderRadius = size / 2;
-  const fontSize = size * 0.4;
+  const fontSize = size * 0.38; // Ajuste leve para mejor estética
+
+  // ✅ Verificación estricta de imagen
+  const hasValidImage =
+    typeof avatarUrl === "string" && avatarUrl.trim().length > 0;
 
   return (
     <View style={[styles.wrapper, { width: size, height: size }]}>
-      {avatarUrl ? (
+      {hasValidImage ? (
         <Image
           source={{ uri: avatarUrl }}
           style={[styles.image, { width: size, height: size, borderRadius }]}
@@ -49,12 +56,22 @@ export default function Avatar({
               width: size,
               height: size,
               borderRadius,
-              backgroundColor: `${COLORS.primary}15`,
-              borderColor: `${COLORS.primary}30`,
+              backgroundColor: inverted
+                ? "rgba(255,255,255,0.2)"
+                : `${COLORS.primary}15`,
+              borderColor: inverted ? COLORS.white : `${COLORS.primary}30`,
             },
           ]}
         >
-          <Text style={[styles.text, { fontSize, color: COLORS.primary }]}>
+          <Text
+            style={[
+              styles.text,
+              {
+                fontSize,
+                color: inverted ? COLORS.white : COLORS.primary,
+              },
+            ]}
+          >
             {initials}
           </Text>
         </View>
@@ -79,13 +96,11 @@ export default function Avatar({
   );
 }
 
+// ... (los estilos se quedan igual)
 const styles = StyleSheet.create({
   wrapper: {
     position: "relative",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    // Eliminamos sombras pesadas para que el círculo se vea más limpio
   },
   image: {
     backgroundColor: COLORS.surface,
@@ -97,6 +112,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: "800",
+    textAlign: "center",
   },
   statusDot: {
     position: "absolute",

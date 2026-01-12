@@ -164,7 +164,10 @@ export default function MesaCard({
                 ]}
                 numberOfLines={1}
               >
-                {isMyTable ? "Tú" : mesa.nombreMesero.split(" ")[0]}
+                {isMyTable
+                  ? "Tú"
+                  : mesa.nombreMesero?.split(" ").slice(0, 2).join(" ") ||
+                    "Mesero"}
               </Text>
             </View>
           ) : (

@@ -12,7 +12,6 @@ import {
   Image,
   ScrollView,
   Alert,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Mesa } from "../types/mesa";
@@ -267,7 +266,7 @@ export default function TableDetailsModal({
                   return (
                     <View key={index} style={styles.productRow}>
                       <View style={styles.qtyBox}>
-                        <Text style={styles.qtyText}>1</Text>
+                        <Text style={styles.qtyText}>{item.cantidad}</Text>
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.productName}>{item.producto}</Text>
@@ -426,12 +425,12 @@ const styles = StyleSheet.create({
   qtyBox: {
     width: 30,
     height: 30,
-    backgroundColor: "#FFF4E6",
+    backgroundColor: `${COLORS.primary}15`,
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
-  qtyText: { color: COLORS.primary, fontWeight: "bold", fontSize: 14 },
+  qtyText: { color: COLORS.primary, fontWeight: "800", fontSize: 14 },
   productName: { fontSize: 15, fontWeight: "600", color: COLORS.text.primary },
   productMeta: { fontSize: 12, color: COLORS.text.muted, marginTop: 2 },
   priceContainer: { alignItems: "flex-end" },
