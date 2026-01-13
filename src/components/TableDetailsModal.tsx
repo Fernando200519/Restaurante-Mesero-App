@@ -126,7 +126,6 @@ export default function TableDetailsModal({
     }
   }, [visible, mesa, token]);
 
-  // Dentro de TableDetailsModal.tsx
   const isPorLiberar = mesa?.estado === "liberar";
 
   if (!mesa) return null;
@@ -260,7 +259,7 @@ export default function TableDetailsModal({
                   color={COLORS.primary}
                   style={{ margin: 30 }}
                 />
-              ) : (
+              ) : items.length > 0 ? (
                 items.map((item, index) => {
                   const color = getStatusColor(item.estado);
                   return (
@@ -292,6 +291,18 @@ export default function TableDetailsModal({
                     </View>
                   );
                 })
+              ) : (
+                <View style={styles.emptyItemsContainer}>
+                  <Ionicons
+                    name="fast-food-outline"
+                    size={48}
+                    color={COLORS.surface}
+                  />
+                  <Text style={styles.emptyItemsText}>
+                    Esta mesa está ocupada pero aún no se han registrado
+                    productos.
+                  </Text>
+                </View>
               )}
             </ScrollView>
           </View>
@@ -464,5 +475,23 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     marginRight: 8,
+  },
+  emptyItemsContainer: {
+    padding: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    marginVertical: 10,
+  },
+  emptyItemsText: {
+    fontSize: 13,
+    color: COLORS.text.muted,
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+    paddingHorizontal: 20,
   },
 });

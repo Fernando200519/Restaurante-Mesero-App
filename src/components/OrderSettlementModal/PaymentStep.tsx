@@ -40,7 +40,6 @@ export const PaymentStep = ({
   const montoACobrar = comensalSel ? comensalSel.total : orderData.total;
   const numRecibido = parseFloat(montoRecibido) || 0;
 
-  // ✅ VALIDACIÓN: ¿El monto es suficiente?
   const esInsuficiente = tipo === "Efectivo" && numRecibido < montoACobrar;
   const cambio = numRecibido > montoACobrar ? numRecibido - montoACobrar : 0;
 
@@ -92,30 +91,92 @@ export const PaymentStep = ({
           </TouchableOpacity>
         </View>
 
+        {/* 2. LISTA DE COMENSALES (MODO SEPARADO) */}
         {modo === "separado" && !comensalSel && (
           <View style={styles.guestList}>
             <Text style={styles.sectionLabel}>
-              Selecciona quién va a pagar:
+              Estado de cobro por persona:
             </Text>
-            {orderData.totalesPorComensal?.map((guest: any, idx: number) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.guestCard}
-                onPress={() => setComensalSel(guest)}
-              >
-                <Text style={styles.guestName}>{guest.nombre}</Text>
-                <View style={styles.row}>
-                  <Text style={styles.guestTotal}>
-                    ${guest.total.toFixed(2)}
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={COLORS.primary}
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
+            {orderData.totalesPorComensal?.map((guest: any, idx: number) => {
+              // ✅ LÓGICA DE ESTADOS
+              const yaPagoTodo = guest.totalPendiente === 0;
+
+              // Verificamos si tiene algún pago pendiente en los detalles de la orden
+              const tienePagoEnRevision = orderData.detallesOrden.some(
+                (d: any) =>
+                  d.comensal === guest.nombre &&
+                  d.pagoId !== null &&
+                  d.pagado === false
+              );
+
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    styles.guestCard,
+                    yaPagoTodo && styles.guestCardPaid,
+                    tienePagoEnRevision && styles.guestCardPending, // Nuevo estilo naranja
+                  ]}
+                  onPress={() =>
+                    !(yaPagoTodo || tienePagoEnRevision) &&
+                    setComensalSel(guest)
+                  }
+                  disabled={yaPagoTodo || tienePagoEnRevision}
+                >
+                  <View>
+                    <Text
+                      style={[
+                        styles.guestName,
+                        (yaPagoTodo || tienePagoEnRevision) && styles.textMuted,
+                      ]}
+                    >
+                      {guest.nombre}
+                    </Text>
+                    {yaPagoTodo && (
+                      <Text style={styles.paidBadgeText}>COMPLETADO</Text>
+                    )}
+                    {tienePagoEnRevision && (
+                      <Text style={styles.pendingBadgeText}>
+                        PAGO EN REVISIÓN
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.row}>
+                    <Text
+                      style={[
+                        styles.guestTotal,
+                        yaPagoTodo && styles.textPaid,
+                        tienePagoEnRevision && styles.textPending,
+                      ]}
+                    >
+                      {yaPagoTodo
+                        ? "PAGADO"
+                        : tienePagoEnRevision
+                        ? "PENDIENTE"
+                        : `$${guest.total.toFixed(2)}`}
+                    </Text>
+                    <Ionicons
+                      name={
+                        yaPagoTodo
+                          ? "checkmark-circle"
+                          : tienePagoEnRevision
+                          ? "time"
+                          : "chevron-forward"
+                      }
+                      size={18}
+                      color={
+                        yaPagoTodo
+                          ? "#10B981"
+                          : tienePagoEnRevision
+                          ? "#F59E0B"
+                          : COLORS.primary
+                      }
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -300,8 +361,6 @@ const styles = StyleSheet.create({
   activeBtn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   methodLabel: { marginTop: 6, fontWeight: "700", fontSize: 13 },
   activeText: { color: COLORS.white },
-
-  // Estilos Tarjeta Deshabilitada
   disabledBtn: {
     backgroundColor: "#F5F5F5",
     borderColor: "#DDD",
@@ -328,7 +387,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
 
-  // Input Cash
   cashSection: { width: "100%", alignItems: "center" },
   inputBox: {
     width: "100%",
@@ -373,5 +431,25 @@ const styles = StyleSheet.create({
   },
   confirmBtnDisabled: { backgroundColor: "#D1D5DB" },
   confirmText: { color: COLORS.white, fontWeight: "800", fontSize: 16 },
+
+  guestCardPaid: { backgroundColor: "#F0FDF4", borderColor: "#DCFCE7" },
+  guestCardPending: { backgroundColor: "#FFFBEB", borderColor: "#FEF3C7" },
+
+  paidBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#166534",
+    marginTop: 2,
+  },
+  pendingBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#B45309",
+    marginTop: 2,
+  },
+
+  textPaid: { color: "#10B981" },
+  textPending: { color: "#F59E0B" },
+  textMuted: { color: COLORS.text.muted },
   row: { flexDirection: "row", alignItems: "center" },
 });

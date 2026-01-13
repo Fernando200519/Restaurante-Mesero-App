@@ -133,15 +133,16 @@ export const ComensalCard = ({
                     </View>
                   )}
 
-                  {!isCancelled && !isDelivered && (
+                  {/* BOTÓN DE GESTIÓN (REEMPLAZA AL DE CANCELAR) */}
+                  {!isCancelled && (
                     <TouchableOpacity
-                      onPress={() => onCancelProduct(prod.id, prod.estado)}
-                      style={styles.cancelIconButton}
+                      onPress={() => onCancelProduct(prod, prod.estado)}
+                      style={styles.manageBtn}
                     >
                       <Ionicons
-                        name="close-circle-outline"
-                        size={22}
-                        color="#EF4444"
+                        name={isDelivered ? "alert-circle" : "close-circle"}
+                        size={24}
+                        color={isDelivered ? COLORS.primary : "#EF4444"}
                       />
                     </TouchableOpacity>
                   )}
@@ -386,4 +387,10 @@ const styles = StyleSheet.create({
   cancelIconButton: { marginLeft: 10, padding: 2 },
   emptyState: { paddingVertical: 20, alignItems: "center" },
   noItemsText: { color: COLORS.text.muted, fontSize: 14 },
+  manageBtn: {
+    padding: 4,
+    marginLeft: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });

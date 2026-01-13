@@ -305,4 +305,25 @@ export const mesasApi = {
       throw new Error(errorText || "Error al procesar el pago");
     }
   },
+
+  cancelarDetalleAvanzado: async (
+    detalleId: number,
+    token: string,
+    payload: any
+  ): Promise<void> => {
+    const url = `${API_URL}/details/${detalleId}/cancel`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Error en proceso de cancelación");
+    }
+  },
 };

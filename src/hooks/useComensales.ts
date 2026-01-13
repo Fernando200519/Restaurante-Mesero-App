@@ -4,11 +4,13 @@ import { mesasApi } from "../api/mesasApi";
 import { ComensalLocal } from "../types/comensal";
 
 export const useComensales = (orderId: number, token: string | null) => {
+  const [mesaFullData, setMesaFullData] = useState<any>(null);
   const [comensales, setComensales] = useState<ComensalLocal[]>([
     { id: 1, nombre: "Comensal 1", total: 0, itemsCount: 0, items: [] },
   ]);
 
   const [fullOrderData, setFullOrderData] = useState<any>(null);
+  const [mesaEstado, setMesaEstado] = useState<string>("ocupada");
   const [isPreparingSettlement, setIsPreparingSettlement] = useState(false);
 
   const fetchOrdenActual = useCallback(async () => {
@@ -17,11 +19,15 @@ export const useComensales = (orderId: number, token: string | null) => {
     try {
       const data = await mesasApi.getOrdenCompleta(orderId, token);
       if (!data) return;
-
       setFullOrderData(data);
 
-      const detalles = data.detallesOrden || [];
+      if (data.mesasIds && data.mesasIds.length > 0) {
+        const mesaInfo = await mesasApi.getMesaById(data.mesasIds[0], token);
+        setMesaFullData(mesaInfo);
+        setMesaEstado(mesaInfo.estado);
+      }
 
+      const detalles = data.detallesOrden || [];
       const nombresDelServidor = [
         ...new Set(detalles.map((d: any) => d.comensal)),
       ];
@@ -51,13 +57,15 @@ export const useComensales = (orderId: number, token: string | null) => {
       );
 
       setComensales((prevLocal) => {
-        const realesLocales = prevLocal.filter(
-          (p) =>
-            p.items.length === 0 &&
-            !nombresDelServidor.includes(p.nombre) &&
-            p.nombre !== "Comensal 1"
+        const manualesAgregadosRecientemente = prevLocal.filter(
+          (p) => !nombresDelServidor.includes(p.nombre) && p.id !== 1
         );
-        return [...listaHidratada, ...realesLocales];
+
+        if (listaHidratada.length > 0) {
+          return [...listaHidratada, ...manualesAgregadosRecientemente];
+        }
+
+        return prevLocal;
       });
     } catch (error) {
       console.error("Error hidratando orden:", error);
@@ -65,16 +73,17 @@ export const useComensales = (orderId: number, token: string | null) => {
   }, [orderId, token]);
 
   const agregarComensal = () =>
-    setComensales((prev) => [
-      ...prev,
-      {
+    setComensales((prev) => {
+      const soloExisteDummy = prev.length === 1 && prev[0].id === 1;
+      const nuevo = {
         id: `local-${Date.now()}`,
-        nombre: `Comensal ${prev.length + 1}`,
+        nombre: `Comensal ${soloExisteDummy ? 1 : prev.length + 1}`,
         total: 0,
         itemsCount: 0,
         items: [],
-      },
-    ]);
+      };
+      return soloExisteDummy ? [nuevo] : [...prev, nuevo];
+    });
 
   const eliminarComensal = (id: string | number) => {
     setComensales((prev) => prev.filter((c) => c.id !== id));
@@ -102,21 +111,41 @@ export const useComensales = (orderId: number, token: string | null) => {
     }
   };
 
-  const cancelarProducto = async (detalleId: number) => {
+  const gestionarIncidenciaProducto = async (
+    detalleId: number,
+    tipo: "Cancelacion" | "Reposicion" | "ReposicionNuevo",
+    datosReemplazo?: any
+  ) => {
     if (!token) return;
+
     try {
-      await mesasApi.actualizarEstadoProducto(
-        orderId,
-        detalleId,
-        "Cancelado",
-        token
-      );
+      const payload: any = {
+        tipoCancelacion: tipo,
+        motivo:
+          tipo === "Cancelacion"
+            ? "Solicitud del cliente"
+            : "Incidencia en platillo",
+        motivoDetallado: "Procesado desde la aplicación móvil de mesero",
+        nuevoDetalleOrden:
+          tipo === "Reposicion" || tipo === "ReposicionNuevo"
+            ? datosReemplazo
+            : null,
+      };
+
+      console.log("📡 Enviando Incidencia:", JSON.stringify(payload, null, 2));
+
+      await mesasApi.cancelarDetalleAvanzado(detalleId, token, payload);
       await fetchOrdenActual();
-    } catch (error) {
-      Alert.alert("Error", "No se pudo procesar la cancelación.");
+      return true;
+    } catch (error: any) {
+      console.error("🔴 Error en incidencia:", error.message);
+      Alert.alert(
+        "Error",
+        "No se pudo procesar la incidencia. Revisa la consola."
+      );
+      return false;
     }
   };
-
   const solicitarCuenta = async (onSuccess: () => void) => {
     if (!token) return;
     try {
@@ -185,8 +214,7 @@ export const useComensales = (orderId: number, token: string | null) => {
   const prepararLiquidacion = async () => {
     if (!token) return null;
 
-    const yaEstaCerrada =
-      fullOrderData?.estado === "Checkout" || fullOrderData?.totalPendiente > 0;
+    const yaEstaCerrada = mesaEstado === "esperando";
 
     setIsPreparingSettlement(true);
     try {
@@ -208,11 +236,13 @@ export const useComensales = (orderId: number, token: string | null) => {
   return {
     comensales,
     fetchOrdenActual,
+    mesaEstado,
+    mesaFullData,
     agregarComensal,
     eliminarComensal,
     renombrarComensal,
     entregarProducto,
-    cancelarProducto,
+    gestionarIncidenciaProducto,
     solicitarCuenta,
     cerrarYPrepararPago,
     ejecutarPago,

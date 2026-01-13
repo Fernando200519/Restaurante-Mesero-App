@@ -8,6 +8,7 @@ import {
   StatusBar as RNStatusBar,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -24,6 +25,8 @@ import { EditComensalModal } from "../components/EditComensalModal";
 import { UpdateDinersModal } from "../components/UpdateDinersModal";
 import { ConfirmActionModal } from "../components/ConfirmActionModal";
 import { OrderSettlementModal } from "../components/OrderSettlementModal/OrderSettlementModal";
+import { useMesas } from "../hooks/useMesas";
+import { ProductIncidentModal } from "../components/ProductIncidentModal";
 
 import { COLORS, SPACING } from "../constants/theme";
 
@@ -37,6 +40,7 @@ const ComandaScreen = () => {
   const [numComensalesMesa, setNumComensalesMesa] = useState(
     numComensales || 0
   );
+  const [gestionItem, setGestionItem] = useState<any | null>(null);
   const [modalDinersVisible, setModalDinersVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [cancelInfo, setCancelInfo] = useState<{
@@ -49,19 +53,80 @@ const ComandaScreen = () => {
   >(null);
   const [nombreTemporal, setNombreTemporal] = useState("");
 
+  const { liberarMesa } = useMesas();
+  const [isLiberating, setIsLiberating] = useState(false);
+
   const {
     comensales,
     fetchOrdenActual,
+    mesaEstado,
+    mesaFullData,
     agregarComensal,
     eliminarComensal,
     renombrarComensal,
     entregarProducto,
-    cancelarProducto,
+    gestionarIncidenciaProducto,
     ejecutarPago,
     prepararLiquidacion,
     fullOrderData,
     isPreparingSettlement,
   } = useComensales(orderId, token);
+
+  const isPorLiberar = mesaEstado === "liberar";
+
+  const handleLiberarMesa = async () => {
+    if (!mesaFullData) return;
+
+    setIsLiberating(true);
+    try {
+      await liberarMesa(mesaFullData.id, mesaFullData.zonaId || 1);
+
+      Alert.alert("Éxito", "Mesa liberada correctamente.");
+      navigation.navigate("Mesas");
+    } catch (error) {
+      Alert.alert("Error", "No se pudo liberar la mesa.");
+    } finally {
+      setIsLiberating(false);
+    }
+  };
+
+  const handleManageAction = async (
+    tipo: "Cancelacion" | "Reposicion" | "ReposicionNuevo",
+    nuevaCant?: number
+  ) => {
+    if (!gestionItem) return;
+
+    let datosReemplazo = null;
+
+    if (tipo === "Reposicion" || tipo === "ReposicionNuevo") {
+      datosReemplazo = {
+        comensal: gestionItem.comensal,
+        orderDetailReplacementDTO: {
+          productoId: gestionItem.productoId || gestionItem.id,
+          cantidad: nuevaCant || gestionItem.cantidad,
+          complementosIds:
+            gestionItem.complementos?.map((c: any) => c.id) || [],
+          exclusionProductoIds: gestionItem.exclusionesIds || [],
+          comentario:
+            tipo === "ReposicionNuevo"
+              ? "Ajuste de cantidad"
+              : "Reposición por incidencia",
+        },
+      };
+    }
+
+    const exito = await gestionarIncidenciaProducto(
+      gestionItem.id,
+      tipo,
+      datosReemplazo
+    );
+    if (exito) setGestionItem(null);
+  };
+
+  const handleBotonPrincipal = () => {
+    if (isPorLiberar) return handleLiberarMesa();
+    handleFinalizar();
+  };
 
   const isUserInteracting = useMemo(() => {
     return (
@@ -93,24 +158,8 @@ const ComandaScreen = () => {
     }, [fetchOrdenActual, isUserInteracting])
   );
 
-  const handlePrepareCancel = (id: number, estado: string) => {
-    const s = (estado || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, "")
-      .toUpperCase();
-
-    let mensajeAviso = "";
-
-    if (s === "SOLICITADO" || s === "ENPREPARACION") {
-      mensajeAviso =
-        "Este platillo aún está en proceso inicial. Se cancelará sin cargos para el comensal.";
-    } else {
-      mensajeAviso =
-        "⚠️ ATENCIÓN: El platillo ya está listo o fue entregado. Se aplicará un recargo y el producto debe ser retirado.";
-    }
-
-    setCancelInfo({ id, mensaje: mensajeAviso });
+  const handlePrepareCancel = (producto: any) => {
+    setGestionItem(producto);
   };
 
   const totalCuenta = useMemo(() => {
@@ -118,16 +167,13 @@ const ComandaScreen = () => {
   }, [comensales]);
 
   const esOrdenEnCheckout = useMemo(() => {
-    return (
-      fullOrderData?.estado === "Checkout" ||
-      (fullOrderData?.total > 0 &&
-        fullOrderData?.totalPagado < fullOrderData?.total)
-    );
-  }, [fullOrderData]);
+    return mesaEstado === "esperando";
+  }, [mesaEstado]);
 
   const handleFinalizar = async () => {
     if (esOrdenEnCheckout) {
-      setPaymentModalVisible(true);
+      const data = await prepararLiquidacion();
+      if (data) setPaymentModalVisible(true);
       return;
     }
 
@@ -148,10 +194,16 @@ const ComandaScreen = () => {
     );
   };
 
-  const handleCancelConfirm = () => {
+  const handleCancelConfirm = async () => {
     if (cancelInfo) {
-      cancelarProducto(cancelInfo.id);
-      setCancelInfo(null);
+      const exito = await gestionarIncidenciaProducto(
+        cancelInfo.id,
+        "Cancelacion"
+      );
+
+      if (exito) {
+        setCancelInfo(null);
+      }
     }
   };
 
@@ -302,21 +354,41 @@ const ComandaScreen = () => {
           <TouchableOpacity
             style={[
               styles.checkoutBtn,
-              esOrdenEnCheckout && { backgroundColor: COLORS.primary },
+              {
+                backgroundColor: isPorLiberar
+                  ? "#3B82F6"
+                  : esOrdenEnCheckout
+                  ? COLORS.primary
+                  : "#000",
+              },
             ]}
-            onPress={handleFinalizar}
-            activeOpacity={0.8}
+            onPress={handleBotonPrincipal}
+            disabled={isLiberating}
           >
-            <Ionicons
-              name={esOrdenEnCheckout ? "cash" : "receipt"}
-              size={24}
-              color={COLORS.white}
-            />
-            <Text style={styles.checkoutText}>
-              {esOrdenEnCheckout
-                ? "Ver Ticket / Cobrar"
-                : "Solicitar Cuenta / Checkout"}
-            </Text>
+            {isLiberating ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons
+                  name={
+                    isPorLiberar
+                      ? "brush-outline"
+                      : esOrdenEnCheckout
+                      ? "cash"
+                      : "receipt"
+                  }
+                  size={24}
+                  color={COLORS.white}
+                />
+                <Text style={styles.checkoutText}>
+                  {isPorLiberar
+                    ? "Limpiar y Liberar Mesa"
+                    : esOrdenEnCheckout
+                    ? "Ver Ticket / Cobrar"
+                    : "Solicitar Cuenta / Checkout"}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
 
@@ -330,7 +402,6 @@ const ComandaScreen = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal para nombres individuales */}
       <EditComensalModal
         visible={modalVisible}
         value={nombreTemporal}
@@ -339,7 +410,6 @@ const ComandaScreen = () => {
         onClose={() => setModalVisible(false)}
       />
 
-      {/* Modal para el conteo total de la mesa */}
       <UpdateDinersModal
         visible={modalDinersVisible}
         currentDiners={numComensalesMesa}
@@ -350,15 +420,11 @@ const ComandaScreen = () => {
         onClose={() => setModalDinersVisible(false)}
       />
 
-      <ConfirmActionModal
-        visible={!!cancelInfo}
-        title="¿Cancelar producto?"
-        message={cancelInfo?.mensaje || ""}
-        confirmText="Confirmar Cancelación"
-        confirmColor={COLORS.error}
-        icon="alert-circle"
-        onConfirm={handleCancelConfirm}
-        onCancel={() => setCancelInfo(null)}
+      <ProductIncidentModal
+        visible={!!gestionItem}
+        item={gestionItem}
+        onClose={() => setGestionItem(null)}
+        onAction={handleManageAction}
       />
 
       <ConfirmActionModal
