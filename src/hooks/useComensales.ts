@@ -15,8 +15,12 @@ export const useComensales = (orderId: number, token: string | null) => {
     if (!orderId || !token) return;
 
     try {
-      const detalles: any[] = await mesasApi.getDetalleOrden(orderId, token);
-      if (!detalles || detalles.length === 0) return;
+      const data = await mesasApi.getOrdenCompleta(orderId, token);
+      if (!data) return;
+
+      setFullOrderData(data);
+
+      const detalles = data.detallesOrden || [];
 
       const nombresDelServidor = [
         ...new Set(detalles.map((d: any) => d.comensal)),
@@ -26,7 +30,7 @@ export const useComensales = (orderId: number, token: string | null) => {
         (nombre: any, index: number) => {
           const items = detalles
             .filter((d: any) => d.comensal === nombre)
-            .map((item) => ({
+            .map((item: any) => ({
               ...item,
               comentario: item.comentario || item.notas || "",
               complementos: item.complementos || [],
@@ -138,86 +142,60 @@ export const useComensales = (orderId: number, token: string | null) => {
 
   const ejecutarPago = async (
     config: {
-      modo: "junto" | "separado";
       tipoPago: "Efectivo" | "Tarjeta";
-      propinaTotal: number;
+      montoPagado: number;
+      detallesIds: number[];
+      propina: number;
     },
     onSuccess: () => void
   ) => {
-    if (!token || !fullOrderData) {
-      Alert.alert("Error", "No hay datos de la orden para procesar el pago.");
-      return;
-    }
+    if (!token) return;
 
     try {
-      if (config.modo === "junto") {
-        // ---------------------------------------------------------
-        // 1. PAGO ÚNICO (TODO JUNTO)
-        // ---------------------------------------------------------
-        const todosLosIds = fullOrderData.detallesOrden
-          .filter((d: any) => d.estado !== "Cancelado" && !d.pagado)
-          .map((d: any) => d.id);
+      const payload = {
+        tipoPago: config.tipoPago,
+        detallesIds: config.detallesIds,
+        propina: config.propina,
+        tarjeta: {
+          estado: "Pendiente",
+        },
+        efectivo:
+          config.tipoPago === "Efectivo"
+            ? { recibido: config.montoPagado }
+            : null,
+      };
 
-        const payload = {
-          tipoPago: config.tipoPago,
-          detallesIds: todosLosIds,
-          propina: config.propinaTotal,
-          tarjeta:
-            config.tipoPago === "Tarjeta" ? { estado: "Pendiente" } : null,
-          efectivo: config.tipoPago === "Efectivo" ? { recibido: 0 } : null,
-        };
+      console.log(
+        "📡 Enviando Pago corregido:",
+        JSON.stringify(payload, null, 2)
+      );
 
-        await mesasApi.registrarPago(orderId, token, payload);
-      } else {
-        // ---------------------------------------------------------
-        // 2. PAGO POR COMENSAL (SEPARADO)
-        // ---------------------------------------------------------
-        const comensalesUnicos = [
-          ...new Set(fullOrderData.detallesOrden.map((d: any) => d.comensal)),
-        ];
-
-        for (const nombre of comensalesUnicos) {
-          const idsDeEsteComensal = fullOrderData.detallesOrden
-            .filter(
-              (d: any) =>
-                d.comensal === nombre && d.estado !== "Cancelado" && !d.pagado
-            )
-            .map((d: any) => d.id);
-
-          if (idsDeEsteComensal.length === 0) continue;
-
-          const payload = {
-            tipoPago: config.tipoPago,
-            detallesIds: idsDeEsteComensal,
-            propina: config.propinaTotal / comensalesUnicos.length,
-            tarjeta:
-              config.tipoPago === "Tarjeta" ? { estado: "Pendiente" } : null,
-            efectivo: config.tipoPago === "Efectivo" ? { recibido: 0 } : null,
-          };
-
-          await mesasApi.registrarPago(orderId, token, payload);
-        }
-      }
-
+      await mesasApi.registrarPago(orderId, token, payload);
+      await fetchOrdenActual();
       onSuccess();
     } catch (error: any) {
-      console.error("🔴 Error en flujo de pago:", error.message);
+      console.error("🔴 Error detallado en registrarPago:", error.message);
       Alert.alert(
         "Error de Pago",
-        "No se pudo registrar la transacción en el servidor."
+        "El servidor requiere datos específicos. Verifica el monto e intenta de nuevo."
       );
     }
   };
 
   const prepararLiquidacion = async () => {
     if (!token) return null;
+
+    const yaEstaCerrada =
+      fullOrderData?.estado === "Checkout" || fullOrderData?.totalPendiente > 0;
+
     setIsPreparingSettlement(true);
     try {
-      await mesasApi.finalizarPedido(orderId, token);
+      if (!yaEstaCerrada) {
+        await mesasApi.finalizarPedido(orderId, token);
+      }
 
       const data = await mesasApi.getOrdenCompleta(orderId, token);
       setFullOrderData(data);
-
       return data;
     } catch (error) {
       Alert.alert("Error", "No se pudo preparar la cuenta.");

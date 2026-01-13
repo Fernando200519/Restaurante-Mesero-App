@@ -149,12 +149,6 @@ export const ComensalCard = ({
 
                 {Boolean(prod.comentario) && (
                   <View style={styles.noteContainer}>
-                    <Ionicons
-                      name="ribbon-outline"
-                      size={12}
-                      color={COLORS.text.muted}
-                      style={{ marginTop: 2 }}
-                    />
                     <Text style={styles.noteText}>Nota: {prod.comentario}</Text>
                   </View>
                 )}

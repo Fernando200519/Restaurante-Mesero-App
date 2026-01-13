@@ -16,15 +16,13 @@ export const notificationsApi = {
 
   markAsRead: async (token: string, id: number): Promise<void> => {
     try {
-      // ✅ CAMBIO CLAVE: Usamos la ruta plural sin ID en la URL
       const response = await fetch(`${API_URL}/notifications`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json", // Aseguramos que acepte JSON
+          Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        // ✅ Enviamos el ID dentro del arreglo 'ids'
         body: JSON.stringify({
           ids: [id],
           leido: true,

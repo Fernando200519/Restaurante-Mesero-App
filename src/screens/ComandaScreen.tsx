@@ -23,7 +23,7 @@ import { ComensalCard } from "../components/ComensalCard";
 import { EditComensalModal } from "../components/EditComensalModal";
 import { UpdateDinersModal } from "../components/UpdateDinersModal";
 import { ConfirmActionModal } from "../components/ConfirmActionModal";
-import { OrderSettlementModal } from "../components/OrderSettlementModal";
+import { OrderSettlementModal } from "../components/OrderSettlementModal/OrderSettlementModal";
 
 import { COLORS, SPACING } from "../constants/theme";
 
@@ -117,13 +117,35 @@ const ComandaScreen = () => {
     return comensales.reduce((acc, comensal) => acc + comensal.total, 0);
   }, [comensales]);
 
-  const handleFinalizar = async () => {
-    // El hook hace todo el trabajo sucio
-    const success = await prepararLiquidacion();
+  const esOrdenEnCheckout = useMemo(() => {
+    return (
+      fullOrderData?.estado === "Checkout" ||
+      (fullOrderData?.total > 0 &&
+        fullOrderData?.totalPagado < fullOrderData?.total)
+    );
+  }, [fullOrderData]);
 
-    if (success) {
+  const handleFinalizar = async () => {
+    if (esOrdenEnCheckout) {
       setPaymentModalVisible(true);
+      return;
     }
+
+    Alert.alert(
+      "¿Cerrar cuenta?",
+      "Al solicitar la cuenta, ya no se podrán añadir más productos. ¿Estás seguro?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sí, Cerrar Cuenta",
+          style: "destructive",
+          onPress: async () => {
+            const success = await prepararLiquidacion();
+            if (success) setPaymentModalVisible(true);
+          },
+        },
+      ]
+    );
   };
 
   const handleCancelConfirm = () => {
@@ -276,15 +298,25 @@ const ComandaScreen = () => {
           ))
         )}
 
-        {/* ✅ BOTÓN DE ACCIÓN FINAL: Aparece mágicamente cuando todo se entregó */}
         {esCuentaFinalizable && (
           <TouchableOpacity
-            style={styles.checkoutBtn}
+            style={[
+              styles.checkoutBtn,
+              esOrdenEnCheckout && { backgroundColor: COLORS.primary },
+            ]}
             onPress={handleFinalizar}
             activeOpacity={0.8}
           >
-            <Ionicons name="receipt" size={24} color={COLORS.white} />
-            <Text style={styles.checkoutText}>Solicitar Cuenta / Checkout</Text>
+            <Ionicons
+              name={esOrdenEnCheckout ? "cash" : "receipt"}
+              size={24}
+              color={COLORS.white}
+            />
+            <Text style={styles.checkoutText}>
+              {esOrdenEnCheckout
+                ? "Ver Ticket / Cobrar"
+                : "Solicitar Cuenta / Checkout"}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -437,7 +469,7 @@ const styles = StyleSheet.create({
   },
   checkoutBtn: {
     flexDirection: "row",
-    backgroundColor: "#000000", // Negro para diferenciar de "Nuevo Comensal"
+    backgroundColor: "#000000",
     paddingVertical: 16,
     borderRadius: 18,
     alignItems: "center",
